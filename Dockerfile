@@ -17,7 +17,6 @@ RUN set -eux; \
       bash \
       less \
       coreutils \
-      gh \
       jq \
       gosu \
       iptables \
@@ -36,6 +35,10 @@ RUN set -eux; \
       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
       > /etc/apt/sources.list.d/nodesource.list; \
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/githubcli.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       docker-ce \
@@ -43,7 +46,8 @@ RUN set -eux; \
       containerd.io \
       docker-buildx-plugin \
       docker-compose-plugin \
-      nodejs; \
+      nodejs \
+      gh; \
     rm -rf /var/lib/apt/lists/*
 
 # Install Git 2.53.0 from source (bookworm packages are older),
