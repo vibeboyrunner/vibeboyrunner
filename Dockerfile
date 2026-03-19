@@ -107,8 +107,5 @@ COPY manager /vibeboyrunner/services/manager
 COPY entrypoint.sh /usr/local/bin/vbr-dind-entrypoint.sh
 RUN chmod +x /usr/local/bin/vbr-dind-entrypoint.sh
 
-RUN useradd -m -s /bin/bash -u 1000 vbr
-USER vbr
-
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/vbr-dind-entrypoint.sh"]
 CMD ["dockerd", "--host=unix:///var/run/docker.sock", "--storage-driver=vfs"]

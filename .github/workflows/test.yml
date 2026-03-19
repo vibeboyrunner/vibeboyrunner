@@ -51,3 +51,13 @@ jobs:
 
       - name: Run prod setup tests
         run: bash tests/setup/prod-setup.test.sh
+
+  docker-smoke-test:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Docker smoke test
+        run: bash tests/docker/smoke.test.sh

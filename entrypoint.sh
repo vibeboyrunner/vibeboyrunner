@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# DIND requires root for dockerd and privileged operations.
-# The Dockerfile sets USER vbr for security policy compliance; escalate here.
-if [ "$(id -u)" -ne 0 ]; then
-  exec gosu root "$0" "$@"
-fi
-
 log() {
   local level="$1"
   shift
