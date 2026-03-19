@@ -1,11 +1,10 @@
 name: Publish Production Setup Script
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
+  workflow_run:
+    workflows: ["Publish DIND Image"]
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -14,26 +13,41 @@ permissions:
 jobs:
   render-and-publish:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
+      - name: Resolve tag ref
+        id: ref
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            TAG="${{ github.event.workflow_run.head_branch }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: ${TAG}"
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.tag }}
 
       - name: Render standalone setup script
         shell: bash
         env:
           DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
           GITHUB_OWNER_REPO: ${{ github.repository }}
+          TAG: ${{ steps.ref.outputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p dist
 
           if [[ -z "${DOCKERHUB_NAMESPACE:-}" ]]; then
             DEFAULT_IMAGE_REF="vbr-dind:local"
-          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
+          elif [[ "${TAG}" == v* ]]; then
+            VERSION="${TAG#v}"
             DEFAULT_IMAGE_REF="${DOCKERHUB_NAMESPACE}/vbr-dind:${VERSION}"
           else
-            DEFAULT_IMAGE_REF="${DOCKERHUB_NAMESPACE}/vbr-dind:main"
+            DEFAULT_IMAGE_REF="${DOCKERHUB_NAMESPACE}/vbr-dind:latest"
           fi
 
           DEFAULT_SETUP_SCRIPT_URL="https://github.com/${GITHUB_OWNER_REPO}/releases/latest/download/setup.sh"
@@ -58,9 +72,10 @@ jobs:
           if-no-files-found: error
 
       - name: Publish setup script to release assets
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(steps.ref.outputs.tag, 'v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ref.outputs.tag }}
           files: |
             dist/setup.sh
             dist/setup_skill.md

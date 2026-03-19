@@ -1,0 +1,54 @@
+name: Test DIND Service
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dind-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manager-tests:
+    name: Manager service tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: manager
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: manager/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  setup-script-tests:
+    name: Setup script tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run dev setup tests
+        run: bash tests/setup/dev-setup.test.sh
+
+      - name: Run prod setup tests
+        run: bash tests/setup/prod-setup.test.sh
