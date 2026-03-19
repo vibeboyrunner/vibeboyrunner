@@ -7,6 +7,10 @@ PROD_ENV_EXAMPLE="${SCRIPT_DIR}/.env.prod.example"
 COMMAND="up"
 if [ "$#" -gt 0 ]; then
   case "$1" in
+    --help|-h)
+      COMMAND="help"
+      shift
+      ;;
     -*)
       ;;
     *)

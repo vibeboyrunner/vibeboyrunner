@@ -34,14 +34,16 @@ This downloads the setup script and runs the `install` command, which:
 - Places the `vibeboyrunner` CLI at `~/.vibeboyrunner/bin/vibeboyrunner`.
 - Adds `~/.vibeboyrunner/bin` to the user's PATH in their shell rc file.
 
-After installation, the user needs to either:
-- Open a new terminal, or
-- Run: `export PATH="$HOME/.vibeboyrunner/bin:$PATH"`
+**Important:** The PATH change only takes effect in new shells. In the current session (and in every subsequent shell command you run), you MUST prepend the PATH export when calling `vibeboyrunner`. Always use this pattern:
+
+```
+export PATH="$HOME/.vibeboyrunner/bin:$PATH" && vibeboyrunner <command>
+```
 
 Verify the CLI is available:
 
 ```
-vibeboyrunner --help
+export PATH="$HOME/.vibeboyrunner/bin:$PATH" && vibeboyrunner help
 ```
 
 **Stop and wait** for user confirmation.
@@ -51,7 +53,7 @@ vibeboyrunner --help
 Run:
 
 ```
-vibeboyrunner up
+export PATH="$HOME/.vibeboyrunner/bin:$PATH" && vibeboyrunner up
 ```
 
 This pulls the Vibeboyrunner Docker image (if not already present) and starts the container. The user should see output confirming the container started successfully.
@@ -59,13 +61,13 @@ This pulls the Vibeboyrunner Docker image (if not already present) and starts th
 To check status at any time:
 
 ```
-vibeboyrunner status
+export PATH="$HOME/.vibeboyrunner/bin:$PATH" && vibeboyrunner status
 ```
 
 To view logs:
 
 ```
-vibeboyrunner logs
+export PATH="$HOME/.vibeboyrunner/bin:$PATH" && vibeboyrunner logs
 ```
 
 **Stop and wait** for user confirmation that the container is running.
@@ -105,7 +107,7 @@ Recap what was done:
 - Connected Cursor IDE to the container via Dev Containers.
 - Introduced the Father Agent who handles everything inside the environment.
 
-The user can manage the environment anytime with:
+The user can manage the environment anytime with (in a new terminal, or by prepending `export PATH="$HOME/.vibeboyrunner/bin:$PATH" &&`):
 - `vibeboyrunner up` — start/update the container.
 - `vibeboyrunner down` — stop and remove the container.
 - `vibeboyrunner status` — check container status.
