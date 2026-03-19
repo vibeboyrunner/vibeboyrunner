@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN set -eux; \
     apt-get update; \
+    apt-get upgrade -y; \
     apt-get install -y --no-install-recommends \
       apt-transport-https \
       ca-certificates \
@@ -39,24 +40,20 @@ RUN set -eux; \
       docker-compose-plugin; \
     rm -rf /var/lib/apt/lists/*
 
-# Install Git 2.53.0 from source (bookworm packages are older).
+# Install Git 2.53.0 from source (bookworm packages are older),
+# then remove build-only dependencies to reduce attack surface.
 RUN set -eux; \
     GIT_VERSION="2.53.0"; \
+    BUILD_DEPS="build-essential gettext libcurl4-gnutls-dev libexpat1-dev libssl-dev zlib1g-dev xz-utils"; \
     apt-get update; \
-    apt-get install -y --no-install-recommends \
-      build-essential \
-      gettext \
-      libcurl4-gnutls-dev \
-      libexpat1-dev \
-      libssl-dev \
-      zlib1g-dev \
-      xz-utils; \
+    apt-get install -y --no-install-recommends $BUILD_DEPS; \
     curl -fsSL "https://mirrors.edge.kernel.org/pub/software/scm/git/git-${GIT_VERSION}.tar.xz" -o /tmp/git.tar.xz; \
     tar -xJf /tmp/git.tar.xz -C /tmp; \
     make -C "/tmp/git-${GIT_VERSION}" prefix=/usr/local -j"$(nproc)" all; \
     make -C "/tmp/git-${GIT_VERSION}" prefix=/usr/local install; \
     git --version | grep -q "2.53.0"; \
     rm -rf "/tmp/git-${GIT_VERSION}" /tmp/git.tar.xz; \
+    apt-get purge -y --auto-remove $BUILD_DEPS; \
     rm -rf /var/lib/apt/lists/*
 
 # Install Cursor Agent CLI (beta) into root user environment.
