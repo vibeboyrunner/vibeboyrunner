@@ -1,7 +1,8 @@
 # VibeBoyRunner
 
-[![tests](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml/badge.svg)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml)
-[![publish](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/dind-image-publish.yml/badge.svg)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/dind-image-publish.yml)
+[![tests (main)](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?branch=main&label=tests%20%28main%29)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=branch%3Amain)
+[![tests (release)](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?event=push&label=tests%20%28release%29)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=event%3Apush+branch%3Av*)
+[![publish](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/dind-image-publish.yml?label=publish)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/dind-image-publish.yml)
 [![release](https://img.shields.io/github/v/release/vibeboyrunner/vibeboyrunner?label=release)](https://github.com/vibeboyrunner/vibeboyrunner/releases/latest)
 [![docker](https://img.shields.io/docker/v/vibeboyrunner/vibeboyrunner?label=docker&sort=semver)](https://hub.docker.com/r/vibeboyrunner/vibeboyrunner)
 [![license](https://img.shields.io/github/license/vibeboyrunner/vibeboyrunner)](LICENSE)
