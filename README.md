@@ -22,7 +22,7 @@ Before installing, make sure you have:
 Install the `vibeboyrunner` CLI:
 
 ```bash
-curl -fsSL "https://github.com/vibeboyrunner/vibeboyrunner/releases/latest/download/setup.sh" | bash -s install
+curl -fsSL "https://vibeboyrunner.github.io/vibeboyrunner/latest/setup.sh" | bash -s install
 ```
 
 This places the CLI at `~/.vibeboyrunner/bin/vibeboyrunner` and adds it to your PATH. Open a new terminal (or run `export PATH="$HOME/.vibeboyrunner/bin:$PATH"`) to pick it up.
@@ -292,17 +292,22 @@ Tag strategy:
 - `main` push → `main`, `sha-<short-sha>`
 - `vX.Y.Z` tag → `X.Y.Z`, `X.Y`, `X`, `latest`
 
-### Setup Script
+### Setup Script (GitHub Pages)
 
 Workflow: `.github/workflows/setup-script-publish.yml`
 
-- Artifact on `main`: `setup-script` (contains `setup.sh`)
-- Release asset on `v*` tags: `setup.sh`
+On `v*` tag pushes, rendered `setup.sh` and `setup_skill.md` are published to the `gh-pages` branch under versioned slugs:
 
-Default `DIND_IMAGE_REF` injected into the rendered script:
-- Tag build (`v1.2.3`) → `${DOCKERHUB_NAMESPACE}/vbr-dind:1.2.3`
-- Main build → `${DOCKERHUB_NAMESPACE}/vbr-dind:main`
-- No `DOCKERHUB_NAMESPACE` → `vbr-dind:local`
+| Slug | Content |
+|------|---------|
+| `/<tag>/` (e.g. `/v0.0.6/`) | Version-specific rendered files |
+| `/latest/` | Always matches the most recent tag |
+
+Pages base URL: `https://vibeboyrunner.github.io/vibeboyrunner`
+
+Default install URL points to `/latest/setup.sh`. Version-specific scripts are available at `/<tag>/setup.sh`.
+
+Source templates: `setup.prod.sh.tmpl`, `setup_skill.md.tmpl`
 
 ## Extending
 

@@ -26,43 +26,60 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Resolved tag: ${TAG}"
 
-      - name: Checkout
+      - name: Skip if not a version tag
+        if: ${{ !startsWith(steps.ref.outputs.tag, 'v') }}
+        run: |
+          echo "Not a version tag (${TAG}), skipping."
+          exit 0
+        env:
+          TAG: ${{ steps.ref.outputs.tag }}
+
+      - name: Checkout source
+        if: startsWith(steps.ref.outputs.tag, 'v')
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.ref.outputs.tag }}
+          path: source
 
-      - name: Render standalone setup script
+      - name: Determine version and image ref
+        if: startsWith(steps.ref.outputs.tag, 'v')
+        id: meta
         shell: bash
         env:
           DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          GITHUB_OWNER_REPO: ${{ github.repository }}
           TAG: ${{ steps.ref.outputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          if [[ -n "${DOCKERHUB_NAMESPACE:-}" ]]; then
+            IMAGE_REF="${DOCKERHUB_NAMESPACE}/vibeboyrunner:${VERSION}"
+          else
+            IMAGE_REF="vibeboyrunner/vibeboyrunner:${VERSION}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}, Image ref: ${IMAGE_REF}"
+
+      - name: Render setup script and skill
+        if: startsWith(steps.ref.outputs.tag, 'v')
+        shell: bash
+        env:
+          IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
+          PAGES_BASE: https://vibeboyrunner.github.io/vibeboyrunner
         run: |
           set -euo pipefail
           mkdir -p dist
+          SETUP_URL="${PAGES_BASE}/latest/setup.sh"
 
-          if [[ -z "${DOCKERHUB_NAMESPACE:-}" ]]; then
-            DEFAULT_IMAGE_REF="vbr-dind:local"
-          elif [[ "${TAG}" == v* ]]; then
-            VERSION="${TAG#v}"
-            DEFAULT_IMAGE_REF="${DOCKERHUB_NAMESPACE}/vbr-dind:${VERSION}"
-          else
-            DEFAULT_IMAGE_REF="${DOCKERHUB_NAMESPACE}/vbr-dind:latest"
-          fi
-
-          DEFAULT_SETUP_SCRIPT_URL="https://github.com/${GITHUB_OWNER_REPO}/releases/latest/download/setup.sh"
-
-          sed -e "s|__DEFAULT_DIND_IMAGE_REF__|${DEFAULT_IMAGE_REF}|g" \
-              -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${DEFAULT_SETUP_SCRIPT_URL}|g" \
-              setup.prod.sh.tmpl > dist/setup.sh
+          sed -e "s|__DEFAULT_DIND_IMAGE_REF__|${IMAGE_REF}|g" \
+              -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${SETUP_URL}|g" \
+              source/setup.prod.sh.tmpl > dist/setup.sh
           chmod +x dist/setup.sh
-          echo "Rendered dist/setup.sh with default image: ${DEFAULT_IMAGE_REF}"
 
-          sed -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${DEFAULT_SETUP_SCRIPT_URL}|g" \
-              setup_skill.md.tmpl > dist/setup_skill.md
-          echo "Rendered dist/setup_skill.md"
+          sed -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${SETUP_URL}|g" \
+              source/setup_skill.md.tmpl > dist/setup_skill.md
 
       - name: Upload setup artifacts
+        if: startsWith(steps.ref.outputs.tag, 'v')
         uses: actions/upload-artifact@v4
         with:
           name: setup-artifacts
@@ -71,12 +88,60 @@ jobs:
             dist/setup_skill.md
           if-no-files-found: error
 
-      - name: Publish setup script to release assets
+      - name: Checkout gh-pages branch
+        if: startsWith(steps.ref.outputs.tag, 'v')
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+        continue-on-error: true
+        id: checkout-pages
+
+      - name: Bootstrap gh-pages branch if missing
+        if: startsWith(steps.ref.outputs.tag, 'v') && steps.checkout-pages.outcome == 'failure'
+        run: |
+          mkdir -p pages
+          cd pages
+          git init
+          git checkout --orphan gh-pages
+          echo "# GitHub Pages for vibeboyrunner" > README.md
+          git add README.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: init gh-pages branch"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+
+      - name: Publish to gh-pages
+        if: startsWith(steps.ref.outputs.tag, 'v')
+        env:
+          TAG: ${{ steps.ref.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p "${TAG}"
+          cp ../dist/setup.sh "${TAG}/setup.sh"
+          cp ../dist/setup_skill.md "${TAG}/setup_skill.md"
+          git add "${TAG}/"
+
+          mkdir -p latest
+          cp ../dist/setup.sh latest/setup.sh
+          cp ../dist/setup_skill.md latest/setup_skill.md
+          git add latest/
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: publish setup files for ${TAG}"
+            git push origin gh-pages
+          fi
+
+      - name: Create release
         if: startsWith(steps.ref.outputs.tag, 'v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ref.outputs.tag }}
-          files: |
-            dist/setup.sh
-            dist/setup_skill.md
           generate_release_notes: true
