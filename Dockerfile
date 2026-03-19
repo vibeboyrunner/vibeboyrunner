@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM debian:bookworm-slim
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -18,26 +19,31 @@ RUN set -eux; \
       coreutils \
       gh \
       jq \
-      nodejs \
-      npm \
+      gosu \
       iptables \
       kmod \
       iproute2 \
       tini; \
     install -m 0755 -d /etc/apt/keyrings; \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
+    curl -fsSL https://download.docker.com/linux/debian/gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
     chmod a+r /etc/apt/keyrings/docker.gpg; \
     echo \
       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-      $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
       > /etc/apt/sources.list.d/docker.list; \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+      | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+      > /etc/apt/sources.list.d/nodesource.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       docker-ce \
       docker-ce-cli \
       containerd.io \
       docker-buildx-plugin \
-      docker-compose-plugin; \
+      docker-compose-plugin \
+      nodejs; \
     rm -rf /var/lib/apt/lists/*
 
 # Install Git 2.53.0 from source (bookworm packages are older),
@@ -81,6 +87,9 @@ COPY agents /opt/vbr-bootstrap/agents
 COPY manager /vibeboyrunner/services/manager
 COPY entrypoint.sh /usr/local/bin/vbr-dind-entrypoint.sh
 RUN chmod +x /usr/local/bin/vbr-dind-entrypoint.sh
+
+RUN useradd -m -s /bin/bash -u 1000 vbr
+USER vbr
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/vbr-dind-entrypoint.sh"]
 CMD ["dockerd", "--host=unix:///var/run/docker.sock", "--storage-driver=vfs"]
