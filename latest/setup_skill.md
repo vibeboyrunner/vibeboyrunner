@@ -1,0 +1,112 @@
+---
+name: vibeboyrunner-setup
+description: Guides a user through installing and connecting to Vibeboyrunner — an AI-powered development environment that orchestrates worker agents inside containers.
+---
+
+# Vibeboyrunner Setup Skill
+
+You are helping a user set up Vibeboyrunner on their machine. Follow the steps below in order. Execute one step at a time and wait for the user to confirm before moving to the next.
+
+## Prerequisites Check
+
+Before starting, verify the user has:
+
+1. **Docker** installed and running.
+   - Check: `docker info` should succeed.
+   - If not installed: guide user to https://docs.docker.com/get-docker/
+2. **Cursor IDE** installed (https://cursor.com).
+   - This is the IDE used to interact with the Father Agent inside the container.
+3. **Dev Containers extension** by Anysphere installed in Cursor.
+   - The user can check by opening Cursor and looking in the Extensions panel for "Dev Containers" by Anysphere.
+   - If not installed: tell the user to open Cursor, go to Extensions (Cmd+Shift+X / Ctrl+Shift+X), search for "Dev Containers" by Anysphere, and install it.
+
+Confirm all three are in place before proceeding. If the user is missing any, help them install it first.
+
+## Step 1 — Install Vibeboyrunner CLI
+
+Run the setup script to install the `vibeboyrunner` CLI:
+
+```
+curl -fsSL "https://vibeboyrunner.github.io/vibeboyrunner/latest/setup.sh" | bash -s install
+```
+
+This downloads the setup script and runs the `install` command, which:
+- Places the `vibeboyrunner` CLI at `~/.vibeboyrunner/bin/vibeboyrunner`.
+- Adds `~/.vibeboyrunner/bin` to the user's PATH in their shell rc file.
+
+After installation, the user needs to either:
+- Open a new terminal, or
+- Run: `export PATH="$HOME/.vibeboyrunner/bin:$PATH"`
+
+Verify the CLI is available:
+
+```
+vibeboyrunner --help
+```
+
+**Stop and wait** for user confirmation.
+
+## Step 2 — Start Vibeboyrunner
+
+Run:
+
+```
+vibeboyrunner up
+```
+
+This pulls the Vibeboyrunner Docker image (if not already present) and starts the container. The user should see output confirming the container started successfully.
+
+To check status at any time:
+
+```
+vibeboyrunner status
+```
+
+To view logs:
+
+```
+vibeboyrunner logs
+```
+
+**Stop and wait** for user confirmation that the container is running.
+
+## Step 3 — Connect Cursor IDE to the Container
+
+Guide the user through connecting Cursor to the running Vibeboyrunner container:
+
+1. Open **Cursor IDE**.
+2. Open the Command Palette: **Cmd+Shift+P** (macOS) or **Ctrl+Shift+P** (Windows/Linux).
+3. Type and select: **Dev Containers: Attach to Running Container...**
+4. From the list, select the container named **vbr-dind** (or the name shown in the `vibeboyrunner status` output).
+5. Cursor will open a new window connected to the container.
+6. Once connected, open the terminal inside Cursor (Ctrl+` or Cmd+`).
+7. Navigate to the working directory: `cd /workdir`
+8. Open the folder in Cursor: **File → Open Folder → /workdir**
+
+**Stop and wait** for user confirmation that they are connected and see `/workdir` in Cursor.
+
+## Step 4 — Meet the Father Agent
+
+The user is now inside the Vibeboyrunner environment. The Father Agent is the AI orchestrator that will guide them from here.
+
+Tell the user to:
+
+1. Open the Cursor Agent chat (Cmd+L / Ctrl+L or the chat panel).
+2. Type: **Hello**
+3. The Father Agent will detect this is a fresh installation (the `onboarding` workspace will be empty) and automatically start the onboarding flow — checking auth, explaining the system, and walking through a guided demo.
+
+The Father Agent will take over from here. The user is all set.
+
+## Summary
+
+Recap what was done:
+- Installed the `vibeboyrunner` CLI.
+- Started the Vibeboyrunner container.
+- Connected Cursor IDE to the container via Dev Containers.
+- Introduced the Father Agent who handles everything inside the environment.
+
+The user can manage the environment anytime with:
+- `vibeboyrunner up` — start/update the container.
+- `vibeboyrunner down` — stop and remove the container.
+- `vibeboyrunner status` — check container status.
+- `vibeboyrunner logs` — tail container logs.
