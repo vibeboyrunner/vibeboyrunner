@@ -3,8 +3,9 @@ name: Test DIND Service
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
   pull_request:
-  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -15,28 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tag-check:
-    name: Check for version tag
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    outputs:
-      has_tag: ${{ steps.check.outputs.has_tag }}
-    steps:
-      - name: Check if commit has a v* tag
-        id: check
-        run: |
-          TAGS=$(git ls-remote --tags "${{ github.server_url }}/${{ github.repository }}.git" "refs/tags/v*" | grep "^${{ github.sha }}" || true)
-          if [[ -n "$TAGS" ]]; then
-            echo "has_tag=true" >> "$GITHUB_OUTPUT"
-            echo "Commit ${{ github.sha }} has a version tag — skipping standalone tests (publish workflow handles them)"
-          else
-            echo "has_tag=false" >> "$GITHUB_OUTPUT"
-          fi
-
   manager-tests:
     name: Manager service tests
-    needs: [tag-check]
-    if: always() && (needs.tag-check.outputs.has_tag != 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -60,8 +41,6 @@ jobs:
 
   setup-script-tests:
     name: Setup script tests
-    needs: [tag-check]
-    if: always() && (needs.tag-check.outputs.has_tag != 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -1,11 +1,11 @@
 name: Publish Production Setup Script
 
 on:
-  workflow_run:
-    workflows: ["Publish DIND Image"]
-    types:
-      - completed
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to publish (e.g. v0.0.8)"
+        required: true
 
 permissions:
   contents: write
@@ -13,41 +13,20 @@ permissions:
 jobs:
   render-and-publish:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    if: startsWith(inputs.tag, 'v')
     steps:
-      - name: Resolve tag ref
-        id: ref
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            TAG="${{ github.event.workflow_run.head_branch }}"
-          else
-            TAG="${{ github.ref_name }}"
-          fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Resolved tag: ${TAG}"
-
-      - name: Skip if not a version tag
-        if: ${{ !startsWith(steps.ref.outputs.tag, 'v') }}
-        run: |
-          echo "Not a version tag (${TAG}), skipping."
-          exit 0
-        env:
-          TAG: ${{ steps.ref.outputs.tag }}
-
       - name: Checkout source
-        if: startsWith(steps.ref.outputs.tag, 'v')
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.ref.outputs.tag }}
+          ref: ${{ inputs.tag }}
           path: source
 
       - name: Determine version and image ref
-        if: startsWith(steps.ref.outputs.tag, 'v')
         id: meta
         shell: bash
         env:
           DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          TAG: ${{ steps.ref.outputs.tag }}
+          TAG: ${{ inputs.tag }}
         run: |
           VERSION="${TAG#v}"
           if [[ -n "${DOCKERHUB_NAMESPACE:-}" ]]; then
@@ -60,7 +39,6 @@ jobs:
           echo "Version: ${VERSION}, Image ref: ${IMAGE_REF}"
 
       - name: Render setup script and skill
-        if: startsWith(steps.ref.outputs.tag, 'v')
         shell: bash
         env:
           IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
@@ -79,7 +57,6 @@ jobs:
               source/setup_skill.md.tmpl > dist/setup_skill.md
 
       - name: Upload setup artifacts
-        if: startsWith(steps.ref.outputs.tag, 'v')
         uses: actions/upload-artifact@v4
         with:
           name: setup-artifacts
@@ -89,7 +66,6 @@ jobs:
           if-no-files-found: error
 
       - name: Checkout gh-pages branch
-        if: startsWith(steps.ref.outputs.tag, 'v')
         uses: actions/checkout@v4
         with:
           ref: gh-pages
@@ -99,7 +75,7 @@ jobs:
         id: checkout-pages
 
       - name: Bootstrap gh-pages branch if missing
-        if: startsWith(steps.ref.outputs.tag, 'v') && steps.checkout-pages.outcome == 'failure'
+        if: steps.checkout-pages.outcome == 'failure'
         run: |
           mkdir -p pages
           cd pages
@@ -114,9 +90,8 @@ jobs:
           git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
 
       - name: Publish to gh-pages
-        if: startsWith(steps.ref.outputs.tag, 'v')
         env:
-          TAG: ${{ steps.ref.outputs.tag }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           cd pages
@@ -141,8 +116,7 @@ jobs:
           fi
 
       - name: Create release
-        if: startsWith(steps.ref.outputs.tag, 'v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.ref.outputs.tag }}
+          tag_name: ${{ inputs.tag }}
           generate_release_notes: true
