@@ -1,8 +1,7 @@
 # VibeBoyRunner
 
-[![tests (main)](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?branch=main&label=tests%20%28main%29)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=branch%3Amain)
-[![tests (release)](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?event=push&label=tests%20%28release%29)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=event%3Apush+branch%3Av*)
-[![publish](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/publish-image.yml?label=publish)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/publish-image.yml)
+[![tests](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?branch=main&label=tests)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=branch%3Amain)
+[![publish](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/publish.yml?label=publish)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/publish.yml)
 [![release](https://img.shields.io/github/v/release/vibeboyrunner/vibeboyrunner?label=release)](https://github.com/vibeboyrunner/vibeboyrunner/releases/latest)
 [![docker](https://img.shields.io/docker/v/vibeboyrunner/vibeboyrunner?label=docker&sort=semver)](https://hub.docker.com/r/vibeboyrunner/vibeboyrunner)
 [![license](https://img.shields.io/github/license/vibeboyrunner/vibeboyrunner)](LICENSE)
@@ -302,38 +301,34 @@ Conversation state is persisted under `DIND_HOME_PATH/state/conversations`:
 
 ## CI/CD
 
-### Docker Hub Image
+Two workflows, no manual triggers:
 
-Workflow: `.github/workflows/publish-image.yml`
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `test.yml` | Push to `main`, pull requests | Runs manager tests, setup script tests, Docker smoke test |
+| `publish.yml` | Push tag `v*` | Verifies tests passed → builds Docker image → renders setup script → publishes to gh-pages → creates GitHub release |
 
-Triggers:
-- Push to `main`
-- Push tag `v*`
+### Publish Pipeline
+
+On a `v*` tag push, `publish.yml` runs four jobs:
+
+1. **Verify tests** — queries the GitHub API to confirm a successful Tests run exists for the same commit SHA. Fails if the commit wasn't tested on `main` first.
+2. **Build image** (parallel matrix) — builds Docker images natively on `ubuntu-latest` (amd64) and `ubuntu-24.04-arm` (arm64) in parallel. Each pushes a single-platform digest.
+3. **Publish Docker image** — merges the two digests into a multi-arch manifest and pushes to Docker Hub with semver tags (`X.Y.Z`, `X.Y`, `latest`).
+4. **Publish setup script** — reads `.env.example` (SHARED + PROD sections) to generate the prod preamble, appends the shared body from `setup.sh`, and publishes the rendered script + skill to the `gh-pages` branch. Also creates a GitHub Release.
 
 Required GitHub configuration:
 - Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
-- Variables: `DOCKERHUB_NAMESPACE`
+- Variables: `DOCKERHUB_NAMESPACE`, `PAGES_BASE` (optional, defaults to `https://vibeboyrunner.github.io/vibeboyrunner`)
 
-Published image: `${DOCKERHUB_NAMESPACE}/vibeboyrunner`
-
-Tag strategy:
-- `main` push → `main`, `sha-<short-sha>`
-- `vX.Y.Z` tag → `X.Y.Z`, `X.Y`, `X`, `latest`
-
-### Setup Script (GitHub Pages)
-
-Workflow: `.github/workflows/publish-setup.yml`
-
-On `v*` tag pushes, CI reads `.env.example` (SHARED + PROD sections) to generate the prod preamble, appends the shared body from `setup.sh`, and publishes the result alongside `setup_skill.md` to the `gh-pages` branch:
+### GitHub Pages Structure
 
 | Path | Content |
 |------|---------|
 | `setups/<tag>/` (e.g. `setups/v0.0.6/`) | Version-specific rendered files |
 | `setups/latest/` | Always matches the most recent tag |
 
-Pages base URL: `https://vibeboyrunner.github.io/vibeboyrunner`
-
-Default install URL points to `setups/latest/setup.sh`. Version-specific scripts are available at `setups/<tag>/setup.sh`.
+Default install URL: `https://vibeboyrunner.github.io/vibeboyrunner/setups/latest/setup.sh`
 
 ## Extending
 
