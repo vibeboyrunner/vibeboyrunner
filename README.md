@@ -110,9 +110,8 @@ Key source paths inside `services/dind`:
 | `entrypoint.sh`      | Bootstrap + daemon startup               |
 | `agents/`            | Father agent skill/rule templates         |
 | `manager/`           | Manager service (TypeScript)             |
-| `setup.sh`           | Dev build + run script                   |
-| `setup.prod.sh`      | Local prod testing script                |
-| `setup.prod.sh.tmpl` | Template rendered into release `setup.sh`|
+| `setup.sh`           | Dev preamble + shared logic (single source of truth) |
+| `setup.sh.tmpl`      | Prod preamble (CI appends shared body from `setup.sh`) |
 
 ## Dev Quick Start
 
@@ -122,19 +121,13 @@ From `services/dind`:
 ./setup.sh
 ```
 
-This builds the image and starts/restarts the `vbr-dind` container in dev mode. If `.env` is missing, setup creates it from `.env.dev.example`.
+This builds the image and starts/restarts the `vbr-dind` container in dev mode. If `.env` is missing, setup creates it from `.env.dev.example`. All subcommands are available: `./setup.sh down`, `./setup.sh status`, `./setup.sh logs`.
 
-For local prod testing (uses a pre-built image):
-
-```bash
-./setup.prod.sh up
-```
-
-If `.env` is missing, this creates it from `.env.prod.example`.
+`setup.sh` contains both the dev preamble and the shared body (validation, `docker run` flags, subcommands). The prod template (`setup.sh.tmpl`) is a thin preamble — CI renders its placeholders and appends the shared body from `setup.sh`, producing a self-contained distributable script with zero logic duplication.
 
 ## Environment Variables (Full Reference)
 
-Configured via `.env` (generated from `.env.dev.example` or `.env.prod.example`):
+Configured via `.env` (generated from `.env.dev.example`):
 
 | Variable                       | Description                                                      |
 |--------------------------------|------------------------------------------------------------------|
@@ -145,10 +138,7 @@ Configured via `.env` (generated from `.env.dev.example` or `.env.prod.example`)
 | `DIND_WORKSPACES_PATH`         | Mounted path inside container for workspaces                     |
 | `DIND_SERVICES_PATH`           | Mounted path inside container for services root                  |
 | `DIND_IMAGE_NAME`              | Docker image name to build/run (dev)                             |
-| `DIND_IMAGE_REF`               | Production image reference (local tag or registry)               |
 | `DIND_CONTAINER_NAME`          | Container name                                                   |
-| `DIND_HOME_VOLUME_NAME`        | Named volume for persistent prod home state                      |
-| `DIND_WORKSPACES_VOLUME_NAME`  | Named volume for persistent prod workspaces                      |
 | `DIND_DOCKER_VOLUME_NAME`      | Named volume for `/var/lib/docker` (inner Docker cache)          |
 | `AGENT_PROVIDERS`              | Comma-separated providers to render (currently: `cursor`)        |
 | `MANAGER_PORT`                 | Manager HTTP port inside dind                                    |
@@ -165,17 +155,8 @@ Default port mapping: `20000–20499` on host mapped 1:1 into the container.
 
 ## Mounts
 
-**Dev** (`setup.sh`):
-
 - `HOST_HOME_PATH` → `DIND_HOME_PATH`
 - `HOST_WORKSPACES_PATH` → `DIND_WORKSPACES_PATH`
-- `DIND_DOCKER_VOLUME_NAME` → `/var/lib/docker`
-- Host port range → container port range
-
-**Prod** (`setup.prod.sh`):
-
-- `DIND_HOME_VOLUME_NAME` → `DIND_HOME_PATH`
-- `DIND_WORKSPACES_VOLUME_NAME` → `DIND_WORKSPACES_PATH`
 - `DIND_DOCKER_VOLUME_NAME` → `/var/lib/docker`
 - Host port range → container port range
 
@@ -307,7 +288,7 @@ Pages base URL: `https://vibeboyrunner.github.io/vibeboyrunner`
 
 Default install URL points to `/latest/setup.sh`. Version-specific scripts are available at `/<tag>/setup.sh`.
 
-Source templates: `setup.prod.sh.tmpl`, `setup_skill.md.tmpl`
+Source: `setup.sh.tmpl` (prod preamble) + shared body from `setup.sh`. Also `setup_skill.md.tmpl`.
 
 ## Extending
 
@@ -325,8 +306,14 @@ From `services/dind`:
 # Dev build + restart
 ./setup.sh
 
-# Local prod run
-./setup.prod.sh up
+# Stop container
+./setup.sh down
+
+# Check container status
+./setup.sh status
+
+# Tail container logs
+./setup.sh logs
 
 # Tail runtime log
 tail -f ../../runtime/.vibeboyrunner/runtime/logs.log

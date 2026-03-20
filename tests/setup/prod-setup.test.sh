@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/helpers.sh"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-PROD_TEMPLATE="$DIND_ROOT/setup.prod.sh.tmpl"
+PROD_TEMPLATE="$DIND_ROOT/setup.sh.tmpl"
 
 # ---------------------------------------------------------------------------
 suite "Template placeholders"
@@ -43,13 +43,15 @@ test_template_renders_placeholders
 suite "Command parsing"
 # ---------------------------------------------------------------------------
 
-# Source the rendered script just for its variable logic and functions.
-# We override docker commands to avoid real execution.
+# Render a full prod script: template preamble (with baked values) + shared body.
+# Mirrors what the CI publish workflow does.
 render_script() {
   sed \
     -e 's|__DEFAULT_DIND_IMAGE_REF__|test/image:1.0|g' \
     -e 's|__DEFAULT_SETUP_SCRIPT_URL__|https://test.com/setup.sh|g' \
     "$PROD_TEMPLATE"
+  sed -n '/^# __SHARED_BODY_START__$/,/^# __SHARED_BODY_END__$/p' \
+    "$DIND_ROOT/setup.sh"
 }
 
 test_default_command_is_up() {

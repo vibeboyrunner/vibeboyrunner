@@ -43,14 +43,21 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
           PAGES_BASE: https://vibeboyrunner.github.io/vibeboyrunner
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          SETUP_URL="${PAGES_BASE}/latest/setup.sh"
+          SETUP_URL="${PAGES_BASE}/${TAG}/setup.sh"
 
+          # Prod preamble (template with baked values)
           sed -e "s|__DEFAULT_DIND_IMAGE_REF__|${IMAGE_REF}|g" \
               -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${SETUP_URL}|g" \
-              source/setup.prod.sh.tmpl > dist/setup.sh
+              source/setup.sh.tmpl > dist/setup.sh
+
+          # Append shared body from setup.sh
+          sed -n '/^# __SHARED_BODY_START__$/,/^# __SHARED_BODY_END__$/p' \
+              source/setup.sh >> dist/setup.sh
+
           chmod +x dist/setup.sh
 
           sed -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${SETUP_URL}|g" \
