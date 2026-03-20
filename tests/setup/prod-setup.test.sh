@@ -35,16 +35,18 @@ render_script() {
 
   cat "$PROD_TEMPLATE"
 
-  # CI-derived vars (highest priority)
+  # CI-derived vars (direct assignments, highest priority)
   printf 'VBR_VERSION="%s"\n' "1.0.0"
-  printf ': "${DIND_IMAGE_REF:=%s}"\n' "test/image:1.0"
-  printf ': "${VBR_RELEASE_SETUP_URL:=%s}"\n' "https://test.com/setup.sh"
+  printf 'DIND_IMAGE_REF="%s"\n' "test/image:1.0.0"
+  printf 'VBR_RELEASE_SETUP_URL="%s"\n' "https://test.com/setups/v1.0.0/setup.sh"
 
-  # Env defaults from .env.example (PROD first so it wins over SHARED)
+  # Env defaults from .env.example (PROD first so it wins over SHARED).
+  # Pre-seed awk with CI-derived keys to avoid duplicates.
   {
     sed -n '/^# __PROD__$/,$ { /^[A-Z_][A-Z_0-9]*=/p; }' "$env_file"
     sed -n '/^# __SHARED__$/,/^# __DEV__$/ { /^[A-Z_][A-Z_0-9]*=/p; }' "$env_file"
-  } | awk '{ k=$0; sub(/=.*/, "", k); if (!seen[k]++) print }' \
+  } | awk 'BEGIN { seen["DIND_IMAGE_REF"]=1; seen["VBR_RELEASE_SETUP_URL"]=1 }
+           { k=$0; sub(/=.*/, "", k); if (!seen[k]++) print }' \
     | while IFS= read -r line; do
         key="${line%%=*}"
         val="${line#*=}"

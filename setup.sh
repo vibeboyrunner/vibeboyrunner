@@ -198,8 +198,13 @@ case "$COMMAND" in
       _restart=""
     else
       DIND_IMAGE_REF="${IMAGE_ARG:-$DIND_IMAGE_REF}"
-      if ! docker image inspect "$DIND_IMAGE_REF" >/dev/null 2>&1; then
-        docker pull "$DIND_IMAGE_REF"
+      if docker pull "$DIND_IMAGE_REF" 2>/dev/null; then
+        :
+      elif docker image inspect "$DIND_IMAGE_REF" >/dev/null 2>&1; then
+        echo "Warning: could not pull latest image, using locally cached version" >&2
+      else
+        echo "Error: image $DIND_IMAGE_REF not found locally or remotely" >&2
+        exit 1
       fi
       docker volume create "$DIND_HOME_VOLUME_NAME" >/dev/null
       docker volume create "$DIND_WORKSPACES_VOLUME_NAME" >/dev/null
@@ -254,6 +259,15 @@ case "$COMMAND" in
       echo "Workspaces volume: ${DIND_WORKSPACES_VOLUME_NAME} -> ${DIND_WORKSPACES_PATH}"
       echo "Docker volume: ${DIND_DOCKER_VOLUME_NAME} -> /var/lib/docker"
       echo "Published ports: ${HOST_PORT_RANGE_START}-${HOST_PORT_RANGE_END} -> ${DIND_PORT_RANGE_START}-${DIND_PORT_RANGE_END}"
+
+      _version_url="${VBR_RELEASE_SETUP_URL%/setups/*}/setups/latest/version.txt"
+      if _latest=$(curl -fsSL --max-time 5 "$_version_url" 2>/dev/null) \
+         && [ -n "$_latest" ] && [ "$_latest" != "$VBR_VERSION" ]; then
+        _upgrade_url="${VBR_RELEASE_SETUP_URL%/setups/*}/setups/latest/setup.sh"
+        echo ""
+        echo "Update available: v${_latest} (current: v${VBR_VERSION})"
+        echo "  curl -fsSL ${_upgrade_url} | bash -s install"
+      fi
     fi
     echo ""
     echo "Open in Cursor: ${_cursor_link}"

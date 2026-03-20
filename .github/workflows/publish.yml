@@ -119,8 +119,6 @@ jobs:
     name: Publish Docker image
     needs: build-image
     runs-on: ubuntu-latest
-    outputs:
-      image_ref: ${{ steps.meta.outputs.image_ref }}
     env:
       IMAGE_NAME: ${{ vars.DOCKERHUB_NAMESPACE }}/vibeboyrunner
     steps:
@@ -140,20 +138,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Determine image ref
-        id: meta
-        env:
-          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          VERSION="${TAG#v}"
-          if [[ -n "${DOCKERHUB_NAMESPACE:-}" ]]; then
-            IMAGE_REF="${DOCKERHUB_NAMESPACE}/vibeboyrunner:${VERSION}"
-          else
-            IMAGE_REF="vibeboyrunner/vibeboyrunner:${VERSION}"
-          fi
-          echo "image_ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
-
       - name: Extract Docker metadata
         id: docker-meta
         uses: docker/metadata-action@v5
@@ -161,7 +145,6 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=semver,pattern={{version}},value=${{ github.ref_name }}
-            type=raw,value=latest
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
@@ -183,12 +166,15 @@ jobs:
       - name: Render setup script and skill
         shell: bash
         env:
-          IMAGE_REF: ${{ needs.publish-image.outputs.image_ref }}
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
           PAGES_BASE: ${{ vars.PAGES_BASE }}
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist
+          VERSION="${TAG#v}"
+          NAMESPACE="${DOCKERHUB_NAMESPACE:-vibeboyrunner}"
+          IMAGE_REF="${NAMESPACE}/vibeboyrunner:${VERSION}"
           PAGES_BASE="${PAGES_BASE:-https://vibeboyrunner.github.io/vibeboyrunner}"
           SETUP_URL="${PAGES_BASE}/setups/${TAG}/setup.sh"
 
@@ -198,15 +184,17 @@ jobs:
           cp source/setup.sh.tmpl dist/setup.sh
 
           # CI-derived vars (highest priority)
-          printf 'VBR_VERSION="%s"\n' "${TAG#v}" >> dist/setup.sh
-          printf ': "${DIND_IMAGE_REF:=%s}"\n' "$IMAGE_REF" >> dist/setup.sh
-          printf ': "${VBR_RELEASE_SETUP_URL:=%s}"\n' "$SETUP_URL" >> dist/setup.sh
+          printf 'VBR_VERSION="%s"\n' "$VERSION" >> dist/setup.sh
+          printf 'DIND_IMAGE_REF="%s"\n' "$IMAGE_REF" >> dist/setup.sh
+          printf 'VBR_RELEASE_SETUP_URL="%s"\n' "$SETUP_URL" >> dist/setup.sh
 
-          # Generate env defaults from .env.example (PROD first so it wins over SHARED)
+          # Generate env defaults from .env.example (PROD first so it wins over SHARED).
+          # Keys already written above are pre-seeded in awk to avoid duplicates.
           {
             sed -n '/^# __PROD__$/,$ { /^[A-Z_][A-Z_0-9]*=/p; }' "$ENV_FILE"
             sed -n '/^# __SHARED__$/,/^# __DEV__$/ { /^[A-Z_][A-Z_0-9]*=/p; }' "$ENV_FILE"
-          } | awk '{ k=$0; sub(/=.*/, "", k); if (!seen[k]++) print }' \
+          } | awk 'BEGIN { seen["DIND_IMAGE_REF"]=1; seen["VBR_RELEASE_SETUP_URL"]=1 }
+                   { k=$0; sub(/=.*/, "", k); if (!seen[k]++) print }' \
             | while IFS= read -r line; do
                 key="${line%%=*}"
                 val="${line#*=}"
@@ -221,6 +209,9 @@ jobs:
 
           chmod +x dist/setup.sh
 
+          # Version file for update checks
+          echo "$VERSION" > dist/version.txt
+
           # Render setup skill
           sed -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${SETUP_URL}|g" \
               source/setup_skill.md.tmpl > dist/setup_skill.md
@@ -232,6 +223,7 @@ jobs:
           path: |
             dist/setup.sh
             dist/setup_skill.md
+            dist/version.txt
           if-no-files-found: error
 
       - name: Checkout gh-pages branch
@@ -274,6 +266,7 @@ jobs:
           mkdir -p setups/latest
           cp ../dist/setup.sh setups/latest/setup.sh
           cp ../dist/setup_skill.md setups/latest/setup_skill.md
+          cp ../dist/version.txt setups/latest/version.txt
           git add setups/latest/
 
           cat > README.md <<'EOF'
