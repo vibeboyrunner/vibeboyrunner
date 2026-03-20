@@ -11,7 +11,7 @@ export class CursorAgentProvider implements AgentProvider {
 
   buildInstallScript(): string {
     return [
-      "if ! command -v agent >/dev/null 2>&1; then if [ \"$(id -u)\" != \"0\" ]; then echo 'WARN: cannot install cursor agent as non-root'; else if ! command -v curl >/dev/null 2>&1; then if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends curl ca-certificates; elif command -v apk >/dev/null 2>&1; then apk add --no-cache curl ca-certificates; fi; fi; if command -v curl >/dev/null 2>&1; then (curl -fsSL https://cursor.com/install | bash) || true; ln -sf /root/.local/bin/agent /usr/local/bin/agent || true; ln -sf /root/.local/bin/cursor-agent /usr/local/bin/cursor-agent || true; fi; fi; fi",
+      "if ! command -v agent >/dev/null 2>&1; then if [ \"$(id -u)\" != \"0\" ]; then echo 'WARN: cannot install cursor agent as non-root'; else if ! command -v curl >/dev/null 2>&1; then if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends curl ca-certificates || true; elif command -v apk >/dev/null 2>&1; then apk add --no-cache curl ca-certificates || true; fi; fi; if command -v curl >/dev/null 2>&1; then (curl -fsSL https://cursor.com/install | bash) || true; ln -sf /root/.local/bin/agent /usr/local/bin/agent || true; ln -sf /root/.local/bin/cursor-agent /usr/local/bin/cursor-agent || true; fi; if ! command -v agent >/dev/null 2>&1; then echo 'WARN: cursor agent installation failed — agent command not available'; fi; fi; fi",
       "if command -v agent >/dev/null 2>&1 && ! agent --version >/dev/null 2>&1; then echo 'WARN: agent command exists but is not functional (likely libc mismatch)'; fi"
     ].join("; ");
   }

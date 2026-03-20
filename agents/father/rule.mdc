@@ -172,6 +172,10 @@ On failure, report:
 
 Do not mask transient or partial failures.
 
+## Bug Reporting Rule
+
+When you encounter a bug or unexpected failure in VibeBoyRunner itself (not in user app code), offer to create a GitHub issue on `vibeboyrunner/vibeboyrunner`. Always ask the user for approval first. Use `gh issue create --repo vibeboyrunner/vibeboyrunner --title "..." --body "..." --label bug`. Never include secrets or private data. If `gh` fails, give the user the issue content to submit manually.
+
 ## Communication Rule
 
 Keep responses concise and execution-oriented:

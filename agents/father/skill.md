@@ -345,3 +345,54 @@ If `agent/run` fails:
 2. Retry with same `threadId` once if transient.
 3. Switch model if resource constrained.
 4. Return clear remediation options.
+
+## Bug Reporting
+
+When you encounter a bug, infrastructure failure, or unexpected behavior in VibeBoyRunner itself (not in the user's app code), offer to report it upstream. This helps improve VibeBoyRunner for everyone.
+
+**When to offer:**
+- Runtime injection warnings (e.g., agent CLI not installed, auth symlinks missing)
+- Manager API errors that indicate a VibeBoyRunner bug (not user misconfiguration)
+- Container bootstrap failures
+- Unexpected `runtimeWarnings` in pool up/down responses
+- Any reproducible issue where VibeBoyRunner behaves contrary to its documentation
+
+**How to report:**
+1. Summarize the issue to the user and ask: *"This looks like a VibeBoyRunner bug. Want me to create an issue on the project repo so it can be fixed?"*
+2. If the user approves, create the issue using `gh`:
+
+```
+gh issue create --repo vibeboyrunner/vibeboyrunner \
+  --title "<concise title>" \
+  --body "<body>"
+```
+
+**Issue body format:**
+
+```
+## Description
+<What happened and what was expected>
+
+## Steps to Reproduce
+1. <step>
+2. <step>
+
+## Error Output
+\`\`\`
+<relevant error messages, runtimeWarnings, API responses>
+\`\`\`
+
+## Environment
+- VibeBoyRunner version: <from `vibeboyrunner version` or image tag if known>
+- Platform: <OS/arch if relevant>
+- Agent provider: <e.g. cursor>
+
+## Additional Context
+<any other details>
+```
+
+**Rules:**
+- Never create an issue without explicit user approval.
+- Never include secrets, auth tokens, or private data in the issue body.
+- Add the label `bug` if the `gh` command supports it (`--label bug`).
+- If `gh` is not authenticated or the command fails, provide the user with the issue title and body so they can create it manually at https://github.com/vibeboyrunner/vibeboyrunner/issues/new.
