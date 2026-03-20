@@ -36,6 +36,7 @@ render_script() {
   cat "$PROD_TEMPLATE"
 
   # CI-derived vars (highest priority)
+  printf 'VBR_VERSION="%s"\n' "1.0.0"
   printf ': "${DIND_IMAGE_REF:=%s}"\n' "test/image:1.0"
   printf ': "${VBR_RELEASE_SETUP_URL:=%s}"\n' "https://test.com/setup.sh"
 
@@ -76,8 +77,31 @@ test_help_text() {
   assert_contains "help shows down command" "$output" "down"
   assert_contains "help shows status command" "$output" "status"
   assert_contains "help shows logs command" "$output" "logs"
+  assert_contains "help shows version command" "$output" "version"
 }
 test_help_text
+
+test_version_command() {
+  local rendered="$TMP_DIR/setup-version.sh"
+  render_script > "$rendered"
+  chmod +x "$rendered"
+
+  local output
+  output="$(bash "$rendered" version 2>&1)"
+  assert_contains "version shows version number" "$output" "vibeboyrunner 1.0.0"
+}
+test_version_command
+
+test_version_flag() {
+  local rendered="$TMP_DIR/setup-version-flag.sh"
+  render_script > "$rendered"
+  chmod +x "$rendered"
+
+  local output
+  output="$(bash "$rendered" --version 2>&1)"
+  assert_contains "--version flag works" "$output" "vibeboyrunner 1.0.0"
+}
+test_version_flag
 
 test_unknown_command_rejected() {
   local rendered="$TMP_DIR/setup-unknown.sh"

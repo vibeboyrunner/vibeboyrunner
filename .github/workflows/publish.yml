@@ -199,6 +199,7 @@ jobs:
           cp source/setup.sh.tmpl dist/setup.sh
 
           # CI-derived vars (highest priority)
+          printf 'VBR_VERSION="%s"\n' "${TAG#v}" >> dist/setup.sh
           printf ': "${DIND_IMAGE_REF:=%s}"\n' "$IMAGE_REF" >> dist/setup.sh
           printf ': "${VBR_RELEASE_SETUP_URL:=%s}"\n' "$SETUP_URL" >> dist/setup.sh
 

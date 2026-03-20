@@ -74,37 +74,35 @@ export PATH="$HOME/.vibeboyrunner/bin:$PATH" && vibeboyrunner logs
 
 ## Step 3 — Connect Cursor IDE to the Container
 
-Guide the user through connecting Cursor to the running Vibeboyrunner container:
+The `vibeboyrunner up` output includes an **"Open in Cursor"** deeplink. Tell the user to click or paste this link into their browser. It opens a new Cursor window already attached to the container at `/workdir` — no manual steps required.
+
+The link looks like: `cursor://vscode-remote/attached-container+<hex>/workdir?windowId=_blank`
+
+If the deeplink does not work (e.g., Cursor is not registered as a URI handler), fall back to the manual method:
 
 1. Open **Cursor IDE**.
 2. Open the Command Palette: **Cmd+Shift+P** (macOS) or **Ctrl+Shift+P** (Windows/Linux).
 3. Type and select: **Dev Containers: Attach to Running Container...**
-4. From the list, select the container named **vbr-dind** (or the name shown in the `vibeboyrunner status` output).
-5. Cursor will open a new window connected to the container.
-6. Once connected, open the terminal inside Cursor (Ctrl+` or Cmd+`).
-7. Navigate to the working directory: `cd /workdir`
-8. Open the folder in Cursor: **File → Open Folder → /workdir**
+4. Select the container named **vibeboyrunner** (or the name shown in `vibeboyrunner status`).
+5. Once connected, open the folder: **File → Open Folder → /workdir**
 
 **Stop and wait** for user confirmation that they are connected and see `/workdir` in Cursor.
 
-## Step 4 — Meet the Father Agent
+## Step 4 — Say Hi to the Father Agent
 
-The user is now inside the Vibeboyrunner environment. The Father Agent is the AI orchestrator that will guide them from here.
-
-Tell the user to:
+The user is now inside the Vibeboyrunner environment. Tell them to:
 
 1. Open the Cursor Agent chat (Cmd+L / Ctrl+L or the chat panel).
-2. Type: **Hello**
-3. The Father Agent will detect this is a fresh installation (the `onboarding` workspace will be empty) and automatically start the onboarding flow — checking auth, explaining the system, and walking through a guided demo.
+2. Say **Hello** — the Father Agent will detect this is a fresh installation and start the onboarding flow automatically.
 
-The Father Agent will take over from here. The user is all set.
+The Father Agent takes over from here. The user is all set — happy coding!
 
 ## Summary
 
 Recap what was done:
 - Installed the `vibeboyrunner` CLI.
 - Started the Vibeboyrunner container.
-- Connected Cursor IDE to the container via Dev Containers.
+- Connected Cursor IDE to the container via the deeplink.
 - Introduced the Father Agent who handles everything inside the environment.
 
 The user can manage the environment anytime with (in a new terminal, or by prepending `export PATH="$HOME/.vibeboyrunner/bin:$PATH" &&`):
@@ -112,3 +110,4 @@ The user can manage the environment anytime with (in a new terminal, or by prepe
 - `vibeboyrunner down` — stop and remove the container.
 - `vibeboyrunner status` — check container status.
 - `vibeboyrunner logs` — tail container logs.
+- `vibeboyrunner version` — show installed version.

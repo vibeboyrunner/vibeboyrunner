@@ -3,6 +3,7 @@ set -euo pipefail
 
 # ── Dev Preamble ──────────────────────────────────────────────────────────────
 VBR_MODE="dev"
+VBR_VERSION="dev"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ENV_FILE="${SCRIPT_DIR}/.env"
@@ -70,6 +71,10 @@ if [ "$#" -gt 0 ]; then
       COMMAND="help"
       shift
       ;;
+    --version|-v|-V)
+      COMMAND="version"
+      shift
+      ;;
     -*)
       ;;
     *)
@@ -77,6 +82,11 @@ if [ "$#" -gt 0 ]; then
       shift
       ;;
   esac
+fi
+
+if [ "$COMMAND" = "version" ]; then
+  echo "vibeboyrunner ${VBR_VERSION}"
+  exit 0
 fi
 
 if [ "$COMMAND" = "help" ]; then
@@ -90,6 +100,7 @@ if [ "$COMMAND" = "help" ]; then
   echo "  down      Stop/remove container"
   echo "  status    Show container status"
   echo "  logs      Tail container logs"
+  echo "  version   Show installed version"
   exit 0
 fi
 
@@ -226,6 +237,9 @@ case "$COMMAND" in
       -v "${DIND_DOCKER_VOLUME_NAME}:/var/lib/docker" \
       "$_image"
 
+    _hex_name="$(printf '%s' "$DIND_CONTAINER_NAME" | od -A n -t x1 | tr -d ' \n')"
+    _cursor_link="cursor://vscode-remote/attached-container+${_hex_name}${DIND_WORKDIR_PATH}?windowId=_blank"
+
     if [ "$VBR_MODE" = "dev" ]; then
       echo "Started ${DIND_CONTAINER_NAME} (dev mode)"
       echo "Host home mounted: ${HOST_HOME_ABS} -> ${DIND_HOME_PATH}"
@@ -241,6 +255,8 @@ case "$COMMAND" in
       echo "Docker volume: ${DIND_DOCKER_VOLUME_NAME} -> /var/lib/docker"
       echo "Published ports: ${HOST_PORT_RANGE_START}-${HOST_PORT_RANGE_END} -> ${DIND_PORT_RANGE_START}-${DIND_PORT_RANGE_END}"
     fi
+    echo ""
+    echo "Open in Cursor: ${_cursor_link}"
     ;;
 
   down)
