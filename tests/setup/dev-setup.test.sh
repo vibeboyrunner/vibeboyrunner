@@ -19,19 +19,18 @@ suite "Environment file creation"
 test_env_creation() {
   local test_dir="$TMP_DIR/env-creation"
   mkdir -p "$test_dir"
-  cp "$DIND_ROOT/.env.dev.example" "$test_dir/.env.dev.example"
+  cp "$DIND_ROOT/.env.example" "$test_dir/.env.example"
 
-  # Simulate the env-file creation logic from setup.sh
   local env_file="$test_dir/.env"
-  local dev_example="$test_dir/.env.dev.example"
+  local env_example="$test_dir/.env.example"
   if [ ! -f "$env_file" ]; then
-    cp "$dev_example" "$env_file"
+    cp "$env_example" "$env_file"
   fi
 
-  assert_file_exists "creates .env from .env.dev.example" "$env_file"
+  assert_file_exists "creates .env from .env.example" "$env_file"
 
   local expected_content
-  expected_content="$(cat "$dev_example")"
+  expected_content="$(cat "$env_example")"
   local actual_content
   actual_content="$(cat "$env_file")"
   assert_eq "created .env matches template content" "$expected_content" "$actual_content"
@@ -41,13 +40,13 @@ test_env_creation
 test_env_no_overwrite() {
   local test_dir="$TMP_DIR/env-no-overwrite"
   mkdir -p "$test_dir"
-  cp "$DIND_ROOT/.env.dev.example" "$test_dir/.env.dev.example"
+  cp "$DIND_ROOT/.env.example" "$test_dir/.env.example"
   echo "CUSTOM=value" > "$test_dir/.env"
 
   local env_file="$test_dir/.env"
-  local dev_example="$test_dir/.env.dev.example"
+  local env_example="$test_dir/.env.example"
   if [ ! -f "$env_file" ]; then
-    cp "$dev_example" "$env_file"
+    cp "$env_example" "$env_file"
   fi
 
   local actual_content

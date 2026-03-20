@@ -1,4 +1,4 @@
-name: Publish Production Setup Script
+name: Publish Setup
 
 on:
   workflow_dispatch:
@@ -42,17 +42,35 @@ jobs:
         shell: bash
         env:
           IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
-          PAGES_BASE: https://vibeboyrunner.github.io/vibeboyrunner
+          PAGES_BASE: ${{ vars.PAGES_BASE }}
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          SETUP_URL="${PAGES_BASE}/${TAG}/setup.sh"
+          PAGES_BASE="${PAGES_BASE:-https://vibeboyrunner.github.io/vibeboyrunner}"
+          SETUP_URL="${PAGES_BASE}/setups/${TAG}/setup.sh"
 
-          # Prod preamble (template with baked values)
-          sed -e "s|__DEFAULT_DIND_IMAGE_REF__|${IMAGE_REF}|g" \
-              -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${SETUP_URL}|g" \
-              source/setup.sh.tmpl > dist/setup.sh
+          ENV_FILE="source/.env.example"
+
+          # Start with template header (shebang + VBR_MODE=prod)
+          cp source/setup.sh.tmpl dist/setup.sh
+
+          # CI-derived vars (highest priority)
+          printf ': "${DIND_IMAGE_REF:=%s}"\n' "$IMAGE_REF" >> dist/setup.sh
+          printf ': "${VBR_RELEASE_SETUP_URL:=%s}"\n' "$SETUP_URL" >> dist/setup.sh
+
+          # Generate env defaults from .env.example (PROD first so it wins over SHARED)
+          {
+            sed -n '/^# __PROD__$/,$ { /^[A-Z_][A-Z_0-9]*=/p; }' "$ENV_FILE"
+            sed -n '/^# __SHARED__$/,/^# __DEV__$/ { /^[A-Z_][A-Z_0-9]*=/p; }' "$ENV_FILE"
+          } | awk '{ k=$0; sub(/=.*/, "", k); if (!seen[k]++) print }' \
+            | while IFS= read -r line; do
+                key="${line%%=*}"
+                val="${line#*=}"
+                val="${val%\"}"
+                val="${val#\"}"
+                printf ': "${%s:=%s}"\n' "$key" "$val"
+              done >> dist/setup.sh
 
           # Append shared body from setup.sh
           sed -n '/^# __SHARED_BODY_START__$/,/^# __SHARED_BODY_END__$/p' \
@@ -60,6 +78,7 @@ jobs:
 
           chmod +x dist/setup.sh
 
+          # Render setup skill
           sed -e "s|__DEFAULT_SETUP_SCRIPT_URL__|${SETUP_URL}|g" \
               source/setup_skill.md.tmpl > dist/setup_skill.md
 
@@ -88,9 +107,8 @@ jobs:
           cd pages
           git init
           git checkout --orphan gh-pages
-          echo "# GitHub Pages for vibeboyrunner" > README.md
           touch .nojekyll
-          git add README.md .nojekyll
+          git add .nojekyll
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore: init gh-pages branch"
@@ -105,15 +123,34 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          mkdir -p "${TAG}"
-          cp ../dist/setup.sh "${TAG}/setup.sh"
-          cp ../dist/setup_skill.md "${TAG}/setup_skill.md"
-          git add "${TAG}/"
+          mkdir -p "setups/${TAG}"
+          cp ../dist/setup.sh "setups/${TAG}/setup.sh"
+          cp ../dist/setup_skill.md "setups/${TAG}/setup_skill.md"
+          git add "setups/${TAG}/"
 
-          mkdir -p latest
-          cp ../dist/setup.sh latest/setup.sh
-          cp ../dist/setup_skill.md latest/setup_skill.md
-          git add latest/
+          mkdir -p setups/latest
+          cp ../dist/setup.sh setups/latest/setup.sh
+          cp ../dist/setup_skill.md setups/latest/setup_skill.md
+          git add setups/latest/
+
+          cat > README.md <<'EOF'
+          # VibeBoyRunner — GitHub Pages
+
+          Published artifacts for the [VibeBoyRunner](https://github.com/vibeboyrunner/vibeboyrunner) project.
+
+          ## Structure
+
+          ### `setups/`
+
+          Rendered setup scripts and agent skills, published by CI on each version tag.
+
+          | Path | Description |
+          |------|-------------|
+          | `setups/<tag>/setup.sh` | Version-pinned setup script |
+          | `setups/<tag>/setup_skill.md` | Agent skill for guided setup |
+          | `setups/latest/` | Always matches the most recent release |
+          EOF
+          git add README.md
 
           if git diff --cached --quiet; then
             echo "No changes to commit"

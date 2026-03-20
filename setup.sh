@@ -6,20 +6,21 @@ VBR_MODE="dev"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ENV_FILE="${SCRIPT_DIR}/.env"
-DEV_ENV_EXAMPLE="${SCRIPT_DIR}/.env.dev.example"
+ENV_EXAMPLE="${SCRIPT_DIR}/.env.example"
 
 if [ ! -f "$ENV_FILE" ]; then
-  if [ ! -f "$DEV_ENV_EXAMPLE" ]; then
-    echo "Missing dev env template: $DEV_ENV_EXAMPLE" >&2
+  if [ ! -f "$ENV_EXAMPLE" ]; then
+    echo "Missing env template: $ENV_EXAMPLE" >&2
     exit 1
   fi
-  cp "$DEV_ENV_EXAMPLE" "$ENV_FILE"
-  echo "Created .env from $(basename "$DEV_ENV_EXAMPLE")"
+  cp "$ENV_EXAMPLE" "$ENV_FILE"
+  echo "Created .env from $(basename "$ENV_EXAMPLE")"
 fi
 
 set -a
 # shellcheck source=/dev/null
-source "$ENV_FILE"
+# Source only SHARED + DEV sections; PROD overrides are excluded.
+source <(sed '/^# __PROD__$/,$d' "$ENV_FILE")
 set +a
 
 resolve_path() {

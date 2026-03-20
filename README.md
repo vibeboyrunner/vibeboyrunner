@@ -2,7 +2,7 @@
 
 [![tests (main)](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?branch=main&label=tests%20%28main%29)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=branch%3Amain)
 [![tests (release)](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?event=push&label=tests%20%28release%29)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=event%3Apush+branch%3Av*)
-[![publish](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/dind-image-publish.yml?label=publish)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/dind-image-publish.yml)
+[![publish](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/publish-image.yml?label=publish)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/publish-image.yml)
 [![release](https://img.shields.io/github/v/release/vibeboyrunner/vibeboyrunner?label=release)](https://github.com/vibeboyrunner/vibeboyrunner/releases/latest)
 [![docker](https://img.shields.io/docker/v/vibeboyrunner/vibeboyrunner?label=docker&sort=semver)](https://hub.docker.com/r/vibeboyrunner/vibeboyrunner)
 [![license](https://img.shields.io/github/license/vibeboyrunner/vibeboyrunner)](LICENSE)
@@ -19,10 +19,22 @@ Before installing, make sure you have:
 
 ## Installation
 
+### Option A: Agent-Assisted Setup
+
+Open the Cursor Agent chat (`Cmd+L` / `Ctrl+L`) and paste:
+
+```
+Read https://vibeboyrunner.github.io/vibeboyrunner/setups/latest/setup_skill.md and follow the instructions to set up VibeBoyRunner
+```
+
+The agent will walk you through the entire setup — installing the CLI, starting the container, and connecting Cursor.
+
+### Option B: Manual Setup
+
 Install the `vibeboyrunner` CLI:
 
 ```bash
-curl -fsSL "https://vibeboyrunner.github.io/vibeboyrunner/latest/setup.sh" | bash -s install
+curl -fsSL "https://vibeboyrunner.github.io/vibeboyrunner/setups/latest/setup.sh" | bash -s install
 ```
 
 This places the CLI at `~/.vibeboyrunner/bin/vibeboyrunner` and adds it to your PATH. Open a new terminal (or run `export PATH="$HOME/.vibeboyrunner/bin:$PATH"`) to pick it up.
@@ -46,7 +58,7 @@ This pulls the Docker image (if needed) and starts the container. Connect Cursor
 1. Open **Cursor IDE**.
 2. Open Command Palette — `Cmd+Shift+P` (macOS) / `Ctrl+Shift+P` (Linux/Windows).
 3. Select **Dev Containers: Attach to Running Container...**
-4. Pick the **vbr-dind** container.
+4. Pick the **vibeboyrunner** container.
 5. In the new Cursor window, open the folder `/workdir`.
 6. Open the Cursor Agent chat (`Cmd+L` / `Ctrl+L`) and say **Hello** — the Father Agent takes over from here.
 
@@ -63,23 +75,21 @@ On a fresh install the Father Agent detects an empty workspace and walks you thr
 
 ## Configuration
 
-VibeBoyRunner reads its configuration from a `.env` file. On first run it is generated automatically from defaults. Key settings you may want to customize:
-
-| Variable                   | Description                                                 |
-|----------------------------|-------------------------------------------------------------|
-| `DIND_IMAGE_REF`           | Docker image to run (registry image or local tag)           |
-| `DIND_CONTAINER_NAME`      | Container name (default: `vbr-dind`)                        |
-| `MANAGER_PORT`             | Manager HTTP port inside the container (default: `18080`)   |
-| `MANAGER_AGENT_MODEL`      | Default AI model for agent tasks                            |
-| `GIT_USER_NAME`            | Git identity name for commits (default: `VibeBoyRunner Father Agent`) |
-| `GIT_USER_EMAIL`           | Git identity email for commits                              |
-| `HOST_PORT_RANGE_START/END`| Host port range mapped into the container (default: `20000–20499`) |
-
-You can override any variable with environment variables when running the CLI:
+Override any setting with environment variables when running the CLI:
 
 ```bash
-DIND_IMAGE_REF="<namespace>/vbr-dind:1.2.3" vibeboyrunner up
+DIND_IMAGE_REF="<namespace>/vibeboyrunner:1.2.3" vibeboyrunner up
 ```
+
+| Variable                    | Description                                                          |
+|-----------------------------|----------------------------------------------------------------------|
+| `DIND_IMAGE_REF`            | Docker image to run (default: version-pinned release image)          |
+| `DIND_CONTAINER_NAME`       | Container name (default: `vibeboyrunner`)                            |
+| `MANAGER_PORT`              | Manager HTTP port inside the container (default: `18080`)            |
+| `MANAGER_AGENT_MODEL`       | Default AI model for agent tasks                                     |
+| `GIT_USER_NAME`             | Git identity name for commits                                        |
+| `GIT_USER_EMAIL`            | Git identity email for commits                                       |
+| `HOST_PORT_RANGE_START/END` | Host port range mapped into the container (default: `20000–20499`)   |
 
 ## What's Inside
 
@@ -96,22 +106,7 @@ The VibeBoyRunner container ships with:
 
 # Development
 
-Everything below is aimed at contributors working on VibeBoyRunner itself.
-
-## Architecture Overview
-
-VibeBoyRunner is a Docker-in-Docker (dind) container. The entrypoint bootstraps persistent state (agents, service auth, workspaces) from mounted paths, then starts the Docker daemon and the manager service.
-
-Key source paths inside `services/dind`:
-
-| Path                 | Purpose                                  |
-|----------------------|------------------------------------------|
-| `Dockerfile`         | Container image build                    |
-| `entrypoint.sh`      | Bootstrap + daemon startup               |
-| `agents/`            | Father agent skill/rule templates         |
-| `manager/`           | Manager service (TypeScript)             |
-| `setup.sh`           | Dev preamble + shared logic (single source of truth) |
-| `setup.sh.tmpl`      | Prod preamble (CI appends shared body from `setup.sh`) |
+Everything below is for contributors working on VibeBoyRunner itself.
 
 ## Dev Quick Start
 
@@ -121,13 +116,65 @@ From `services/dind`:
 ./setup.sh
 ```
 
-This builds the image and starts/restarts the `vbr-dind` container in dev mode. If `.env` is missing, setup creates it from `.env.dev.example`. All subcommands are available: `./setup.sh down`, `./setup.sh status`, `./setup.sh logs`.
+This builds the image locally and starts the `vbr-dind` container in dev mode. If `.env` is missing, it is created from `.env.example`.
 
-`setup.sh` contains both the dev preamble and the shared body (validation, `docker run` flags, subcommands). The prod template (`setup.sh.tmpl`) is a thin preamble — CI renders its placeholders and appends the shared body from `setup.sh`, producing a self-contained distributable script with zero logic duplication.
+All subcommands work in dev too:
+
+```bash
+./setup.sh down      # stop container
+./setup.sh status    # check status
+./setup.sh logs      # tail logs
+```
+
+## Setup Script Structure
+
+All setup logic lives in a single file to prevent drift between dev and prod:
+
+| File             | Purpose                                                                 |
+|------------------|-------------------------------------------------------------------------|
+| `setup.sh`       | Dev preamble + shared body (single source of truth for all logic)       |
+| `setup.sh.tmpl`  | Static 3-line prod header (`VBR_MODE="prod"`) — CI generates the rest   |
+| `.env.example`   | Full env contract with `__SHARED__`, `__DEV__`, `__PROD__` sections     |
+
+`setup.sh` is structured in two sections separated by marker comments:
+
+1. **Dev preamble** — sources SHARED + DEV sections from `.env` (excluding PROD), resolves host bind-mount paths, sets `VBR_MODE=dev`.
+2. **Shared body** (between `# __SHARED_BODY_START__` / `# __SHARED_BODY_END__`) — validation, subcommands, `docker run` with all `-e` env flags. Branches on `VBR_MODE` for the few genuine differences:
+
+| Behavior       | Dev                          | Prod                          |
+|----------------|------------------------------|-------------------------------|
+| Image          | `docker build` locally       | `docker pull` from registry   |
+| Storage        | Bind mounts (host paths)     | Named Docker volumes          |
+| Restart policy | None                         | `unless-stopped`              |
+| Install cmd    | N/A                          | `curl` from release URL       |
+
+`.env.example` is the single source of truth for all environment defaults. It uses section markers:
+
+- `# __SHARED__` — vars identical for both modes (container paths, ports, agent config)
+- `# __DEV__` — dev-only vars (host bind-mount paths, local image name)
+- `# __PROD__` — prod-only vars and overrides (image ref, setup URL, volume names, container name)
+
+At build time, CI reads SHARED + PROD sections from `.env.example`, generates `: "${VAR:=value}"` lines, and concatenates: template header + generated preamble + shared body. The result is a self-contained distributable script with no placeholders.
+
+## Architecture Overview
+
+VibeBoyRunner is a Docker-in-Docker (dind) container. The entrypoint bootstraps persistent state (agents, service auth, workspaces) from mounted paths, then starts the Docker daemon and the manager service.
+
+Key source paths inside `services/dind`:
+
+| Path             | Purpose                                       |
+|------------------|-----------------------------------------------|
+| `Dockerfile`     | Container image build                         |
+| `entrypoint.sh`  | Bootstrap + daemon startup                    |
+| `agents/`        | Father agent skill/rule templates             |
+| `manager/`       | Manager service (TypeScript)                  |
+| `setup.sh`       | Dev preamble + shared setup logic             |
+| `setup.sh.tmpl`  | Static prod header (CI generates preamble)    |
+| `.env.example`   | Full env contract (shared + dev + prod)       |
 
 ## Environment Variables (Full Reference)
 
-Configured via `.env` (generated from `.env.dev.example`):
+Configured via `.env` (generated from `.env.example`). The `.env.example` file contains all variables organized by `__SHARED__`, `__DEV__`, and `__PROD__` sections:
 
 | Variable                       | Description                                                      |
 |--------------------------------|------------------------------------------------------------------|
@@ -153,7 +200,7 @@ Configured via `.env` (generated from `.env.dev.example`):
 
 Default port mapping: `20000–20499` on host mapped 1:1 into the container.
 
-## Mounts
+## Mounts (Dev)
 
 - `HOST_HOME_PATH` → `DIND_HOME_PATH`
 - `HOST_WORKSPACES_PATH` → `DIND_WORKSPACES_PATH`
@@ -257,7 +304,7 @@ Conversation state is persisted under `DIND_HOME_PATH/state/conversations`:
 
 ### Docker Hub Image
 
-Workflow: `.github/workflows/dind-image-publish.yml`
+Workflow: `.github/workflows/publish-image.yml`
 
 Triggers:
 - Push to `main`
@@ -267,7 +314,7 @@ Required GitHub configuration:
 - Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
 - Variables: `DOCKERHUB_NAMESPACE`
 
-Published image: `${DOCKERHUB_NAMESPACE}/vbr-dind`
+Published image: `${DOCKERHUB_NAMESPACE}/vibeboyrunner`
 
 Tag strategy:
 - `main` push → `main`, `sha-<short-sha>`
@@ -275,20 +322,18 @@ Tag strategy:
 
 ### Setup Script (GitHub Pages)
 
-Workflow: `.github/workflows/setup-script-publish.yml`
+Workflow: `.github/workflows/publish-setup.yml`
 
-On `v*` tag pushes, rendered `setup.sh` and `setup_skill.md` are published to the `gh-pages` branch under versioned slugs:
+On `v*` tag pushes, CI reads `.env.example` (SHARED + PROD sections) to generate the prod preamble, appends the shared body from `setup.sh`, and publishes the result alongside `setup_skill.md` to the `gh-pages` branch:
 
-| Slug | Content |
+| Path | Content |
 |------|---------|
-| `/<tag>/` (e.g. `/v0.0.6/`) | Version-specific rendered files |
-| `/latest/` | Always matches the most recent tag |
+| `setups/<tag>/` (e.g. `setups/v0.0.6/`) | Version-specific rendered files |
+| `setups/latest/` | Always matches the most recent tag |
 
 Pages base URL: `https://vibeboyrunner.github.io/vibeboyrunner`
 
-Default install URL points to `/latest/setup.sh`. Version-specific scripts are available at `/<tag>/setup.sh`.
-
-Source: `setup.sh.tmpl` (prod preamble) + shared body from `setup.sh`. Also `setup_skill.md.tmpl`.
+Default install URL points to `setups/latest/setup.sh`. Version-specific scripts are available at `setups/<tag>/setup.sh`.
 
 ## Extending
 
@@ -316,7 +361,7 @@ From `services/dind`:
 ./setup.sh logs
 
 # Tail runtime log
-tail -f ../../runtime/.vibeboyrunner/runtime/logs.log
+tail -f dev/runtime/.vibeboyrunner/runtime/logs.log
 
 # Shell into the container
 docker exec -it vbr-dind bash

@@ -1,8 +1,8 @@
-name: Publish DIND Image
+name: Publish Image
 
 on:
   workflow_run:
-    workflows: ["Test DIND Service"]
+    workflows: ["Tests"]
     types:
       - completed
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: dind-image-publish
+  group: publish-image
   cancel-in-progress: false
 
 jobs:
@@ -76,8 +76,8 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Trigger setup script publish
+      - name: Trigger setup publish
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ref.outputs.tag }}
-        run: gh workflow run setup-script-publish.yml -f tag="${TAG}"
+        run: gh workflow run publish-setup.yml -f tag="${TAG}"

@@ -12,44 +12,47 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 PROD_TEMPLATE="$DIND_ROOT/setup.sh.tmpl"
 
 # ---------------------------------------------------------------------------
-suite "Template placeholders"
+suite "Template header"
 # ---------------------------------------------------------------------------
 
-test_template_has_placeholders() {
+test_template_has_static_header() {
   local content
   content="$(cat "$PROD_TEMPLATE")"
-  assert_contains "has __DEFAULT_DIND_IMAGE_REF__" "$content" "__DEFAULT_DIND_IMAGE_REF__"
-  assert_contains "has __DEFAULT_SETUP_SCRIPT_URL__" "$content" "__DEFAULT_SETUP_SCRIPT_URL__"
+  assert_contains "has shebang" "$content" "#!/usr/bin/env bash"
+  assert_contains "has set -euo" "$content" "set -euo pipefail"
+  assert_contains "has VBR_MODE=prod" "$content" 'VBR_MODE="prod"'
 }
-test_template_has_placeholders
-
-test_template_renders_placeholders() {
-  local rendered="$TMP_DIR/setup-rendered.sh"
-  sed \
-    -e 's|__DEFAULT_DIND_IMAGE_REF__|myorg/vbr-dind:1.0.0|g' \
-    -e 's|__DEFAULT_SETUP_SCRIPT_URL__|https://example.com/setup.sh|g' \
-    "$PROD_TEMPLATE" > "$rendered"
-
-  local content
-  content="$(cat "$rendered")"
-  assert_not_contains "rendered has no __DEFAULT_DIND_IMAGE_REF__" "$content" "__DEFAULT_DIND_IMAGE_REF__"
-  assert_not_contains "rendered has no __DEFAULT_SETUP_SCRIPT_URL__" "$content" "__DEFAULT_SETUP_SCRIPT_URL__"
-  assert_contains "rendered includes image ref" "$content" "myorg/vbr-dind:1.0.0"
-  assert_contains "rendered includes setup URL" "$content" "https://example.com/setup.sh"
-}
-test_template_renders_placeholders
+test_template_has_static_header
 
 # ---------------------------------------------------------------------------
 suite "Command parsing"
 # ---------------------------------------------------------------------------
 
-# Render a full prod script: template preamble (with baked values) + shared body.
+# Render a full prod script: template header + generated env preamble + shared body.
 # Mirrors what the CI publish workflow does.
 render_script() {
-  sed \
-    -e 's|__DEFAULT_DIND_IMAGE_REF__|test/image:1.0|g' \
-    -e 's|__DEFAULT_SETUP_SCRIPT_URL__|https://test.com/setup.sh|g' \
-    "$PROD_TEMPLATE"
+  local env_file="$DIND_ROOT/.env.example"
+
+  cat "$PROD_TEMPLATE"
+
+  # CI-derived vars (highest priority)
+  printf ': "${DIND_IMAGE_REF:=%s}"\n' "test/image:1.0"
+  printf ': "${VBR_RELEASE_SETUP_URL:=%s}"\n' "https://test.com/setup.sh"
+
+  # Env defaults from .env.example (PROD first so it wins over SHARED)
+  {
+    sed -n '/^# __PROD__$/,$ { /^[A-Z_][A-Z_0-9]*=/p; }' "$env_file"
+    sed -n '/^# __SHARED__$/,/^# __DEV__$/ { /^[A-Z_][A-Z_0-9]*=/p; }' "$env_file"
+  } | awk '{ k=$0; sub(/=.*/, "", k); if (!seen[k]++) print }' \
+    | while IFS= read -r line; do
+        key="${line%%=*}"
+        val="${line#*=}"
+        val="${val%\"}"
+        val="${val#\"}"
+        printf ': "${%s:=%s}"\n' "$key" "$val"
+      done
+
+  # Shared body
   sed -n '/^# __SHARED_BODY_START__$/,/^# __SHARED_BODY_END__$/p' \
     "$DIND_ROOT/setup.sh"
 }
