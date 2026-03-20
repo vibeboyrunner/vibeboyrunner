@@ -105,6 +105,20 @@ The VibeBoyRunner container ships with:
 - Node.js 22 LTS
 - Manager service for orchestrating dev pools
 
+## Agent Providers
+
+The manager uses an `AgentProvider` interface to interact with AI agent CLIs inside app containers. Set the provider via the `AGENT_PROVIDERS` environment variable.
+
+
+| Provider | CLI        | Status      | `AGENT_PROVIDERS` value |
+| -------- | ---------- | ----------- | ----------------------- |
+| Cursor   | `agent`    | Available   | `cursor` (default)      |
+| Claude   | `claude`   | Planned     | `claude`                |
+| Gemini   | `gemini`   | Planned     | `gemini`                |
+
+
+Each provider handles its own CLI installation, config symlinks, conversation storage paths, and chat execution. See the [Extending](#extending) section for how to add a new provider.
+
 ---
 
 # Development
@@ -365,9 +379,15 @@ Default install URL: `https://vibeboyrunner.github.io/vibeboyrunner/setups/lates
 
 ## Extending
 
-`entrypoint.sh` is split into init + render steps by design:
+### Adding an Agent Provider
 
-- **New agent provider** — add a renderer function and a `case` branch in `render_agents()`.
+1. Create `manager/src/providers/<name>Provider.ts` implementing the `AgentProvider` interface (`buildInstallScript`, `buildConfigScript`, `createThread`, `runChat`, `getServicePaths`).
+2. Register it in `manager/src/providers/index.ts` (`createAgentProvider` factory).
+3. Add a renderer function and a `case` branch in `render_agents()` inside `entrypoint.sh`.
+4. Add `init_service_states "<name>"` and `render_service_links "<name>" "<target>"` in `entrypoint.sh` for service auth state.
+
+### Other Extension Points
+
 - **New service schema** — add `init_service_states "<name>"` and `render_service_links "<name>" "<target>"`.
 - **Multiple active states** — replace hardcoded `default` with a selected state value and link that state.
 
