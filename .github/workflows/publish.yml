@@ -18,20 +18,40 @@ jobs:
     name: Verify tests passed
     runs-on: ubuntu-latest
     steps:
-      - name: Check for successful test run on this commit
+      - name: Wait for successful test run on this commit
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
           REPO: ${{ github.repository }}
+          TIMEOUT: 600
+          INTERVAL: 30
         run: |
-          RESULT=$(gh api "repos/${REPO}/actions/workflows/test.yml/runs?head_sha=${SHA}&status=success" \
-            --jq '.workflow_runs[0].id // empty')
-          if [ -z "$RESULT" ]; then
-            echo "::error::No successful Tests run found for commit ${SHA}."
-            echo "Push to main first and wait for tests to pass before tagging."
-            exit 1
-          fi
-          echo "Tests passed for commit ${SHA} (run ID: ${RESULT})"
+          elapsed=0
+          while true; do
+            SUCCESSFUL=$(gh api "repos/${REPO}/actions/workflows/test.yml/runs?head_sha=${SHA}&status=success" \
+              --jq '.workflow_runs[0].id // empty')
+            if [ -n "$SUCCESSFUL" ]; then
+              echo "Tests passed for commit ${SHA} (run ID: ${SUCCESSFUL})"
+              exit 0
+            fi
+
+            FAILED=$(gh api "repos/${REPO}/actions/workflows/test.yml/runs?head_sha=${SHA}&status=failure" \
+              --jq '.workflow_runs[0].id // empty')
+            if [ -n "$FAILED" ]; then
+              echo "::error::Tests failed for commit ${SHA} (run ID: ${FAILED})."
+              exit 1
+            fi
+
+            if [ "$elapsed" -ge "$TIMEOUT" ]; then
+              echo "::error::Timed out after ${TIMEOUT}s waiting for Tests to complete for commit ${SHA}."
+              echo "Push to main first and wait for tests to pass before tagging."
+              exit 1
+            fi
+
+            echo "Tests still running for ${SHA}… waiting ${INTERVAL}s (${elapsed}/${TIMEOUT}s elapsed)"
+            sleep "$INTERVAL"
+            elapsed=$((elapsed + INTERVAL))
+          done
 
   build-image:
     name: Build ${{ matrix.platform }}
