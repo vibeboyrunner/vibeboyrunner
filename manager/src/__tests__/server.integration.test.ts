@@ -13,6 +13,19 @@ vi.mock("../utils/logger", () => ({
   log: vi.fn()
 }));
 
+vi.mock("net", () => {
+  function createMockServer() {
+    const listeners: Record<string, (...args: unknown[]) => void> = {};
+    return {
+      once(event: string, cb: (...args: unknown[]) => void) { listeners[event] = cb; return this; },
+      listen() { if (listeners.listening) listeners.listening(); },
+      close(cb: () => void) { cb(); }
+    };
+  }
+  const mock = { createServer: vi.fn(() => createMockServer()) };
+  return { default: mock, ...mock };
+});
+
 import { runCommand } from "../utils/process";
 const mockRunCommand = vi.mocked(runCommand);
 
@@ -144,7 +157,7 @@ describe("Manager HTTP Server - Integration", () => {
   });
 
   describe("GET /api/pools/ps", () => {
-    it("returns containers list", async () => {
+    it("returns containers list with agent info", async () => {
       mockRunCommand.mockResolvedValue({
         stdout: '{"Names":"web","Status":"Up 2h"}\n',
         stderr: ""
@@ -155,6 +168,10 @@ describe("Manager HTTP Server - Integration", () => {
       expect(res.body.ok).toBe(true);
       expect(res.body.count).toBe(1);
       expect(res.body.containers[0].Names).toBe("web");
+      expect(res.body.agents).toBeDefined();
+      expect(res.body.agents.cursor).toBeDefined();
+      expect(res.body.agents.cursor.models).toBeInstanceOf(Array);
+      expect(res.body.agents.cursor.models.length).toBeGreaterThan(0);
     });
 
     it("passes all=true query parameter", async () => {

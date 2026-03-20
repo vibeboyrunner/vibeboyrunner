@@ -50,10 +50,10 @@ Use these endpoints as your default control plane:
 - `POST /api/workspaces/:workspace/features/:feature/dev-pool/up`
 - `POST /api/workspaces/:workspace/features/:feature/dev-pool/down`
 - `POST /api/agent/run`
-  - body: `containerId`, `prompt`, optional `threadId`, optional `model`, optional `force`, optional `sandbox`
-  - if the user has specified a preferred model, set `model` explicitly
-  - if no user-specified model is available, omit the `model` field — the manager will use its configured default (`MANAGER_AGENT_MODEL`)
+  - body: `containerId`, `prompt`, optional `threadId`, optional `model`, optional `agent`
+  - **Agent & model selection**: pool up/down and `GET /api/pools/ps` responses include an `agents` map keyed by provider name, e.g. `{ "cursor": { "models": [...], "defaultModel": "..." } }`. Always set `agent` to one of the keys from this map. Pick `model` only from that agent's `models` list. If the user has a preferred model that appears in the list, set `model` explicitly; otherwise omit it to use `defaultModel`.
   - never try to read model from shell env vars; the manager handles the default internally
+  - never invent or guess agent or model names — always pick from the `agents` map returned by the manager
 
 Manager base URL:
 

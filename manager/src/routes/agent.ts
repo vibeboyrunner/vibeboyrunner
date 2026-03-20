@@ -21,6 +21,7 @@ export async function handleAgentRoutes(
     const prompt = String(body.prompt || "").trim();
     const threadId = String(body.threadId || "").trim();
     const model = String(body.model || "").trim();
+    const agent = String(body.agent || "").trim();
 
     const providerOptions: Record<string, unknown> = {};
     if (typeof body.force === "boolean") {
@@ -45,6 +46,7 @@ export async function handleAgentRoutes(
       prompt,
       threadId || undefined,
       model || undefined,
+      agent || undefined,
       Object.keys(providerOptions).length > 0 ? providerOptions : undefined
     );
     sendJson(res, 200, { ok: true, ...result });

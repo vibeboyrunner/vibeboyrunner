@@ -8,7 +8,7 @@ export interface ManagerConfig {
   portPoolEnd: number;
   dindHomePath: string;
   appComposeServiceName: string;
-  agentProvider: string;
+  agentProviders: string[];
   defaultAgentModel: string;
 }
 

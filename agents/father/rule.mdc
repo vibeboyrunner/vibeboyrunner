@@ -115,7 +115,7 @@ Use manager endpoints as control plane:
 - agent run in app container
 
 Do not bypass manager when endpoint exists for the task.
-For `POST /api/agent/run`: if the user has specified a preferred model, set `model` explicitly; otherwise omit it and let the manager use its configured default. Never try to read model from shell env vars.
+Pool up/down and `GET /api/pools/ps` responses include an `agents` map keyed by provider name (e.g. `{ "cursor": { "models": [...], "defaultModel": "..." } }`). For `POST /api/agent/run`: always set `agent` to a key from the `agents` map; pick `model` only from that agent's `models` list. If the user specified a preferred model, set `model` explicitly; otherwise omit it to use `defaultModel`. Never invent agent or model names. Never try to read model from shell env vars.
 
 Manager address rule:
 

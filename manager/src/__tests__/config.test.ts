@@ -31,7 +31,7 @@ describe("getConfig", () => {
     expect(config.portPoolEnd).toBe(20499);
     expect(config.dindHomePath).toBe("/.vibeboyrunner");
     expect(config.appComposeServiceName).toBe("app");
-    expect(config.agentProvider).toBe("cursor");
+    expect(config.agentProviders).toEqual(["cursor"]);
     expect(config.defaultAgentModel).toBe("");
   });
 
@@ -80,13 +80,13 @@ describe("getConfig", () => {
     expect(config.appComposeServiceName).toBe("web");
   });
 
-  it("reads AGENT_PROVIDERS from env (first entry)", () => {
+  it("reads AGENT_PROVIDERS from env (all entries)", () => {
     process.env.AGENT_PROVIDERS = "claude,cursor";
-    expect(getConfig().agentProvider).toBe("claude");
+    expect(getConfig().agentProviders).toEqual(["claude", "cursor"]);
   });
 
-  it("defaults agentProvider to cursor", () => {
-    expect(getConfig().agentProvider).toBe("cursor");
+  it("defaults agentProviders to cursor", () => {
+    expect(getConfig().agentProviders).toEqual(["cursor"]);
   });
 
   it("reads agent model from env", () => {
@@ -101,6 +101,6 @@ describe("getConfig", () => {
 
   it("trims AGENT_PROVIDERS whitespace", () => {
     process.env.AGENT_PROVIDERS = "  cursor  ";
-    expect(getConfig().agentProvider).toBe("cursor");
+    expect(getConfig().agentProviders).toEqual(["cursor"]);
   });
 });

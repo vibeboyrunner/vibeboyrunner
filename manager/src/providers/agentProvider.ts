@@ -26,4 +26,5 @@ export interface AgentProvider {
   createThread(containerId: string): Promise<string>;
   runChat(containerId: string, options: AgentChatOptions): Promise<AgentRunResult>;
   getServicePaths(): AgentServicePaths;
+  getAvailableModels(): string[];
 }

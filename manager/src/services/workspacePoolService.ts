@@ -3,21 +3,28 @@ import path from "path";
 import { ManagerConfig, AppConfig, AppResult } from "../types";
 import { log } from "../utils/logger";
 import { runCommand } from "../utils/process";
-import { createAgentProvider, AgentProvider } from "../providers";
+import { createAllAgentProviders, AgentProvider } from "../providers";
 import { PortAllocator } from "./portAllocator";
 import { RuntimeInjector } from "./runtimeInjector";
+
+interface AgentProviderInfo {
+  models: string[];
+  defaultModel: string;
+}
 
 interface WorkspacePoolResult {
   workspaceName: string;
   featureName?: string;
   appsCount: number;
   results: AppResult[];
+  agents: Record<string, AgentProviderInfo>;
 }
 
 interface DockerPsResult {
   includeAll: boolean;
   count: number;
   containers: Record<string, string>[];
+  agents: Record<string, AgentProviderInfo>;
 }
 
 export interface AgentRunResult {
@@ -31,12 +38,25 @@ export interface AgentRunResult {
 export class WorkspacePoolService {
   private readonly allocator: PortAllocator;
   private readonly runtimeInjector: RuntimeInjector;
-  private readonly agentProvider: AgentProvider;
+  private readonly providers: Map<string, AgentProvider>;
+  private readonly defaultProvider: AgentProvider;
 
   constructor(private readonly config: ManagerConfig) {
-    this.agentProvider = createAgentProvider(config.agentProvider, config.defaultAgentModel);
+    this.providers = createAllAgentProviders(config.agentProviders, config.defaultAgentModel);
+    this.defaultProvider = this.providers.values().next().value!;
     this.allocator = new PortAllocator(config.portPoolStart, config.portPoolEnd);
-    this.runtimeInjector = new RuntimeInjector(config, this.agentProvider);
+    this.runtimeInjector = new RuntimeInjector(config, this.defaultProvider);
+  }
+
+  getAgentsInfo(): Record<string, AgentProviderInfo> {
+    const agents: Record<string, AgentProviderInfo> = {};
+    for (const [name, provider] of this.providers) {
+      agents[name] = {
+        models: provider.getAvailableModels(),
+        defaultModel: this.config.defaultAgentModel
+      };
+    }
+    return agents;
   }
 
   async up(workspaceName: string): Promise<WorkspacePoolResult> {
@@ -135,7 +155,8 @@ export class WorkspacePoolService {
       workspaceName,
       featureName,
       appsCount: results.length,
-      results
+      results,
+      agents: this.getAgentsInfo()
     };
   }
 
@@ -213,7 +234,8 @@ export class WorkspacePoolService {
       workspaceName,
       featureName,
       appsCount: results.length,
-      results
+      results,
+      agents: this.getAgentsInfo()
     };
   }
 
@@ -232,7 +254,8 @@ export class WorkspacePoolService {
     return {
       includeAll,
       count: containers.length,
-      containers
+      containers,
+      agents: this.getAgentsInfo()
     };
   }
 
@@ -241,18 +264,20 @@ export class WorkspacePoolService {
     prompt: string,
     threadId?: string,
     model?: string,
+    agent?: string,
     providerOptions?: Record<string, unknown>
   ): Promise<AgentRunResult> {
-    const effectiveThreadId = threadId || (await this.agentProvider.createThread(containerId));
+    const provider = this.resolveProvider(agent);
+    const effectiveThreadId = threadId || (await provider.createThread(containerId));
 
     log("INFO", "Running agent in app container", {
       containerId,
       threadId: effectiveThreadId,
-      provider: this.agentProvider.name,
+      provider: provider.name,
       promptLength: prompt.length
     });
 
-    const result = await this.agentProvider.runChat(containerId, {
+    const result = await provider.runChat(containerId, {
       threadId: effectiveThreadId,
       prompt,
       model,
@@ -266,6 +291,16 @@ export class WorkspacePoolService {
       stdout: result.stdout,
       stderr: result.stderr
     };
+  }
+
+  private resolveProvider(agent?: string): AgentProvider {
+    if (!agent) return this.defaultProvider;
+    const provider = this.providers.get(agent);
+    if (!provider) {
+      const available = [...this.providers.keys()].join(", ");
+      throw new Error(`Unknown agent provider "${agent}". Available: ${available}`);
+    }
+    return provider;
   }
 
   private async getAppsRoot(workspaceName: string, featureName?: string): Promise<string> {

@@ -28,7 +28,7 @@ function makeConfig(overrides: Partial<ManagerConfig> = {}): ManagerConfig {
     portPoolEnd: 20499,
     dindHomePath: "/.vibeboyrunner",
     appComposeServiceName: "app",
-    agentProvider: "cursor",
+    agentProviders: ["cursor"],
     defaultAgentModel: "",
     ...overrides
   };

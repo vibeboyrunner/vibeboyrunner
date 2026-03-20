@@ -13,6 +13,19 @@ vi.mock("../../utils/logger", () => ({
   log: vi.fn()
 }));
 
+vi.mock("net", () => {
+  function createMockServer() {
+    const listeners: Record<string, (...args: unknown[]) => void> = {};
+    return {
+      once(event: string, cb: (...args: unknown[]) => void) { listeners[event] = cb; return this; },
+      listen() { if (listeners.listening) listeners.listening(); },
+      close(cb: () => void) { cb(); }
+    };
+  }
+  const mock = { createServer: vi.fn(() => createMockServer()) };
+  return { default: mock, ...mock };
+});
+
 import { runCommand } from "../../utils/process";
 const mockRunCommand = vi.mocked(runCommand);
 
@@ -25,7 +38,7 @@ function makeConfig(overrides: Partial<ManagerConfig> = {}): ManagerConfig {
     portPoolEnd: 20099,
     dindHomePath: "/tmp/test-dind-home",
     appComposeServiceName: "app",
-    agentProvider: "cursor",
+    agentProviders: ["cursor"],
     defaultAgentModel: "",
     ...overrides
   };
@@ -65,6 +78,19 @@ describe("WorkspacePoolService", () => {
     );
   }
 
+  describe("getAgentsInfo", () => {
+    it("returns agents map keyed by provider name with models", () => {
+      const config = makeConfig({ workspacesRoot, dindHomePath, defaultAgentModel: "gpt-4o" });
+      const service = new WorkspacePoolService(config);
+      const agents = service.getAgentsInfo();
+
+      expect(agents.cursor).toBeDefined();
+      expect(agents.cursor.defaultModel).toBe("gpt-4o");
+      expect(agents.cursor.models).toBeInstanceOf(Array);
+      expect(agents.cursor.models.length).toBeGreaterThan(0);
+    });
+  });
+
   describe("up", () => {
     it("throws when apps directory does not exist", async () => {
       const config = makeConfig({ workspacesRoot, dindHomePath });
@@ -83,6 +109,8 @@ describe("WorkspacePoolService", () => {
       expect(result.results).toHaveLength(1);
       expect(result.results[0].status).toBe("skipped");
       expect(result.results[0].reason).toContain("missing");
+      expect(result.agents.cursor).toBeDefined();
+      expect(result.agents.cursor.models.length).toBeGreaterThan(0);
     });
 
     it("skips apps missing config.json", async () => {
@@ -213,6 +241,10 @@ describe("WorkspacePoolService", () => {
       expect(result.count).toBe(2);
       expect(result.containers).toHaveLength(2);
       expect(result.containers[0].Names).toBe("web");
+      expect(result.agents).toBeDefined();
+      expect(result.agents.cursor).toBeDefined();
+      expect(result.agents.cursor.models).toBeInstanceOf(Array);
+      expect(result.agents.cursor.models.length).toBeGreaterThan(0);
     });
 
     it("passes -a flag when includeAll is true", async () => {
@@ -247,7 +279,7 @@ describe("WorkspacePoolService", () => {
 
       const config = makeConfig({ workspacesRoot, dindHomePath });
       const service = new WorkspacePoolService(config);
-      const result = await service.runAgent("ctr123", "do something", "thread-1", "gpt-4", {
+      const result = await service.runAgent("ctr123", "do something", "thread-1", "gpt-4", undefined, {
         force: false,
         sandbox: "enabled"
       });

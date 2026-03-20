@@ -10,7 +10,10 @@ export function getConfig(): ManagerConfig {
     portPoolEnd: Number.parseInt(process.env.PORT_POOL_END || "20499", 10),
     dindHomePath: process.env.DIND_HOME_PATH || "/.vibeboyrunner",
     appComposeServiceName: process.env.APP_COMPOSE_SERVICE_NAME || "app",
-    agentProvider: (process.env.AGENT_PROVIDERS || "cursor").split(",")[0].trim(),
+    agentProviders: (process.env.AGENT_PROVIDERS || "cursor")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     defaultAgentModel: (process.env.MANAGER_AGENT_MODEL || "").trim()
   };
 }

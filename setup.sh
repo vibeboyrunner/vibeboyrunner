@@ -20,7 +20,8 @@ fi
 set -a
 # shellcheck source=/dev/null
 # Source only SHARED + DEV sections; PROD overrides are excluded.
-source <(sed '/^# __PROD__$/,$d' "$ENV_FILE")
+# Uses eval instead of source <(...) for bash 3.2 (macOS) compatibility.
+eval "$(sed '/^# __PROD__$/,$d' "$ENV_FILE")"
 set +a
 
 resolve_path() {

@@ -5,16 +5,45 @@ vi.mock("../../utils/process", () => ({
   runCommand: vi.fn()
 }));
 
-import { runCommand } from "../../utils/process";
-const mockRunCommand = vi.mocked(runCommand);
-
 vi.mock("../../utils/logger", () => ({
   log: vi.fn()
 }));
 
+let portFreeOverride: ((port: number) => boolean) | null = null;
+
+function createMockServer() {
+  const listeners: Record<string, (...args: unknown[]) => void> = {};
+  return {
+    once(event: string, cb: (...args: unknown[]) => void) {
+      listeners[event] = cb;
+      return this;
+    },
+    listen(port: number) {
+      const isFree = portFreeOverride ? portFreeOverride(port) : true;
+      if (isFree && listeners.listening) {
+        listeners.listening();
+      } else if (!isFree && listeners.error) {
+        listeners.error(new Error("EADDRINUSE"));
+      }
+    },
+    close(cb: () => void) {
+      cb();
+    }
+  };
+}
+
+vi.mock("net", () => {
+  const mock = { createServer: vi.fn(() => createMockServer()) };
+  return { default: mock, ...mock };
+});
+
+import { runCommand } from "../../utils/process";
+const mockRunCommand = vi.mocked(runCommand);
+
 describe("PortAllocator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    portFreeOverride = null;
     mockRunCommand.mockResolvedValue({ stdout: "", stderr: "" });
   });
 
@@ -114,6 +143,23 @@ describe("PortAllocator", () => {
       const state = await allocator.createState();
       const port = await allocator.allocate(state, "20030");
       expect(port).toBe(20030);
+    });
+
+    it("skips ports that are occupied on the host", async () => {
+      portFreeOverride = (port: number) => port !== 20050;
+      const allocator = new PortAllocator(20000, 20099);
+      const state = await allocator.createState();
+      const port = await allocator.allocate(state, 20050);
+      expect(port).not.toBe(20050);
+      expect(port).toBeGreaterThanOrEqual(20000);
+      expect(port).toBeLessThanOrEqual(20099);
+    });
+
+    it("throws when all ports are occupied on the host", async () => {
+      portFreeOverride = () => false;
+      const allocator = new PortAllocator(20000, 20002);
+      const state = await allocator.createState();
+      await expect(allocator.allocate(state, 20000)).rejects.toThrow("No free ports available");
     });
   });
 });
