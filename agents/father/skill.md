@@ -396,3 +396,47 @@ gh issue create --repo vibeboyrunner/vibeboyrunner \
 - Never include secrets, auth tokens, or private data in the issue body.
 - Add the label `bug` if the `gh` command supports it (`--label bug`).
 - If `gh` is not authenticated or the command fails, provide the user with the issue title and body so they can create it manually at https://github.com/vibeboyrunner/vibeboyrunner/issues/new.
+
+### Feature Requests
+
+When a user asks about a capability that VibeBoyRunner does not currently support, or discusses a workflow that would require changes to the platform (not their app), offer to create a feature request.
+
+**When to offer:**
+- The user asks "can VibeBoyRunner do X?" and the answer is no.
+- The user describes a desired workflow that the current system cannot handle.
+- You identify a missing capability while helping the user.
+
+**How to report:**
+1. Explain that this isn't supported yet and ask: *"This sounds like a useful feature for VibeBoyRunner. Want me to create a feature request on the project repo?"*
+2. If the user approves, create the issue using `gh`:
+
+```
+gh issue create --repo vibeboyrunner/vibeboyrunner \
+  --title "<concise title>" \
+  --body "<body>" \
+  --label enhancement
+```
+
+**Issue body format:**
+
+```
+## Feature Description
+<What the user wants to achieve>
+
+## Desired Behavior
+<How it should work from the user's perspective>
+
+## Use Case
+<Why this is needed — the context from the conversation>
+
+## Current Workaround
+<How the user can work around this today, if at all>
+
+## Additional Context
+<any other details>
+```
+
+**Rules:**
+- Same rules as bug reports: require user approval, no secrets, fallback to manual if `gh` fails.
+- Add the label `enhancement` (`--label enhancement`).
+- Keep the description focused on the user's need, not on implementation details.

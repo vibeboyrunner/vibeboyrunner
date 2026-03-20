@@ -56,21 +56,15 @@ After installation, ensure the `cursor` shell command is available. If not, tell
 
 ### 3. Dev Containers Extension
 
-**Terminal mode:** run `cursor --list-extensions 2>/dev/null | grep -i "dev.containers\|remote-containers"`.
+**Do NOT attempt to check or install this extension programmatically** — the `cursor` CLI extension commands are unreliable across platforms. Instead, ask the user to verify it themselves.
 
-If the extension is not found, offer to install it:
+Tell the user:
 
-```
-cursor --install-extension ms-vscode-remote.remote-containers
-```
-
-If the `cursor` CLI is not available (the command fails), tell the user to:
-1. Open Cursor
-2. Open the Command Palette (Cmd+Shift+P / Ctrl+Shift+P)
-3. Run **Shell Command: Install 'cursor' command in PATH**
-4. Then retry the install command above
-
-**No-terminal mode:** tell the user to open Cursor, go to Extensions (Cmd+Shift+X / Ctrl+Shift+X), search "Dev Containers", and install it.
+> Please make sure the **Dev Containers** extension is installed in Cursor:
+> 1. Open **Cursor IDE**.
+> 2. Open Extensions: **Cmd+Shift+X** (macOS) or **Ctrl+Shift+X** (Windows/Linux).
+> 3. Search for **Dev Containers** (by Microsoft).
+> 4. If it's not installed, click **Install**.
 
 **Stop and wait** for user confirmation that all prerequisites are satisfied before proceeding.
 

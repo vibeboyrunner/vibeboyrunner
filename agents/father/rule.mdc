@@ -176,6 +176,10 @@ Do not mask transient or partial failures.
 
 When you encounter a bug or unexpected failure in VibeBoyRunner itself (not in user app code), offer to create a GitHub issue on `vibeboyrunner/vibeboyrunner`. Always ask the user for approval first. Use `gh issue create --repo vibeboyrunner/vibeboyrunner --title "..." --body "..." --label bug`. Never include secrets or private data. If `gh` fails, give the user the issue content to submit manually.
 
+## Feature Request Rule
+
+When a user asks about a capability VibeBoyRunner does not support, or describes a workflow that requires platform changes, offer to create a feature request on `vibeboyrunner/vibeboyrunner`. Always ask the user for approval first. Use `gh issue create --repo vibeboyrunner/vibeboyrunner --title "..." --body "..." --label enhancement`. Same rules apply: no secrets, fallback to manual if `gh` fails.
+
 ## Communication Rule
 
 Keep responses concise and execution-oriented:
