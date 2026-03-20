@@ -1,11 +1,15 @@
 import fs from "fs/promises";
 import path from "path";
 import { ManagerConfig } from "../types";
+import { AgentProvider } from "../providers";
 import { log } from "../utils/logger";
 import { runCommand } from "../utils/process";
 
 export class RuntimeInjector {
-  constructor(private readonly config: ManagerConfig) {}
+  constructor(
+    private readonly config: ManagerConfig,
+    private readonly agentProvider: AgentProvider
+  ) {}
 
   async ensureSharedServicesMountOverride(
     configRoot: string,
@@ -13,6 +17,7 @@ export class RuntimeInjector {
     appName: string,
     featureName?: string
   ): Promise<string> {
+    const servicePaths = this.agentProvider.getServicePaths();
     const overridePath = path.join(configRoot, ".vbr-manager.override.yml");
     const mountSource = path.join(this.config.dindHomePath, "services");
     const mountTarget = path.join(this.config.dindHomePath, "services");
@@ -29,7 +34,7 @@ export class RuntimeInjector {
           "apps",
           appName,
           "worker",
-          "cursor"
+          servicePaths.conversationSubdir
         )
       : path.join(
           this.config.dindHomePath,
@@ -40,11 +45,11 @@ export class RuntimeInjector {
           "apps",
           appName,
           "worker",
-          "cursor"
+          servicePaths.conversationSubdir
         );
-    const workerDotCursorPath = path.join(workerConversationsRoot, "dot-cursor");
+    const workerDotDirPath = path.join(workerConversationsRoot, servicePaths.dotDir);
 
-    await fs.mkdir(workerDotCursorPath, { recursive: true });
+    await fs.mkdir(workerDotDirPath, { recursive: true });
     await this.ensureOverrideIgnored(gitignorePath);
 
     const override = [
@@ -52,7 +57,7 @@ export class RuntimeInjector {
       `  ${this.config.appComposeServiceName}:`,
       "    volumes:",
       `      - ${mountSource}:${mountTarget}`,
-      `      - ${workerDotCursorPath}:/root/.cursor`
+      `      - ${workerDotDirPath}:${servicePaths.dotDirTarget}`
     ].join("\n");
 
     await fs.writeFile(overridePath, `${override}\n`, "utf8");
@@ -123,11 +128,10 @@ export class RuntimeInjector {
       "set -e",
       "ensure_symlink() { src=\"$1\"; dst=\"$2\"; mkdir -p \"$(dirname \"$dst\")\"; if [ -L \"$dst\" ]; then ln -sfn \"$src\" \"$dst\"; return; fi; if [ -e \"$dst\" ]; then mv \"$dst\" \"${dst}.backup.$(date +%s)\"; fi; ln -sfn \"$src\" \"$dst\"; }",
       `ensure_symlink "${runtimeServicesPath}/gh/default" "/root/.config/gh"`,
-      `ensure_symlink "${runtimeServicesPath}/cursor/default" "/root/.config/cursor"`,
+      this.agentProvider.buildConfigScript(runtimeServicesPath),
       "if ! command -v gh >/dev/null 2>&1; then if [ \"$(id -u)\" != \"0\" ]; then echo 'WARN: cannot install gh as non-root'; else if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends gh curl ca-certificates || true; elif command -v apk >/dev/null 2>&1; then (apk add --no-cache gh curl ca-certificates bash || apk add --no-cache github-cli curl ca-certificates bash || true); elif command -v yum >/dev/null 2>&1; then yum install -y gh curl ca-certificates || true; else echo 'WARN: unsupported package manager for gh install'; fi; fi; fi",
-      "if ! command -v agent >/dev/null 2>&1; then if [ \"$(id -u)\" != \"0\" ]; then echo 'WARN: cannot install cursor agent as non-root'; else if ! command -v curl >/dev/null 2>&1; then if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends curl ca-certificates; elif command -v apk >/dev/null 2>&1; then apk add --no-cache curl ca-certificates; fi; fi; if command -v curl >/dev/null 2>&1; then (curl -fsSL https://cursor.com/install | bash) || true; ln -sf /root/.local/bin/agent /usr/local/bin/agent || true; ln -sf /root/.local/bin/cursor-agent /usr/local/bin/cursor-agent || true; fi; fi; fi",
+      this.agentProvider.buildInstallScript(),
       "if command -v gh >/dev/null 2>&1 && ! gh --version >/dev/null 2>&1; then echo 'WARN: gh command exists but is not functional'; fi",
-      "if command -v agent >/dev/null 2>&1 && ! agent --version >/dev/null 2>&1; then echo 'WARN: agent command exists but is not functional (likely libc mismatch)'; fi",
       "true"
     ].join("; ");
   }

@@ -25,9 +25,8 @@ function makeConfig(overrides: Partial<ManagerConfig> = {}): ManagerConfig {
     portPoolEnd: 20099,
     dindHomePath: "/tmp/test-dind-home",
     appComposeServiceName: "app",
+    agentProvider: "cursor",
     defaultAgentModel: "",
-    defaultAgentForce: true,
-    defaultAgentSandbox: "disabled",
     ...overrides
   };
 }
@@ -248,14 +247,14 @@ describe("WorkspacePoolService", () => {
 
       const config = makeConfig({ workspacesRoot, dindHomePath });
       const service = new WorkspacePoolService(config);
-      const result = await service.runAgent("ctr123", "do something", "thread-1", "gpt-4", false, "enabled");
+      const result = await service.runAgent("ctr123", "do something", "thread-1", "gpt-4", {
+        force: false,
+        sandbox: "enabled"
+      });
 
       expect(result.containerId).toBe("ctr123");
       expect(result.prompt).toBe("do something");
       expect(result.threadId).toBe("thread-1");
-      expect(result.model).toBe("gpt-4");
-      expect(result.force).toBe(false);
-      expect(result.sandbox).toBe("enabled");
       expect(result.stdout).toContain("Agent output");
     });
 
@@ -271,7 +270,7 @@ describe("WorkspacePoolService", () => {
       expect(result.threadId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
     });
 
-    it("uses config defaults when optional params omitted", async () => {
+    it("delegates to agent provider with defaults", async () => {
       mockRunCommand
         .mockResolvedValueOnce({ stdout: "new-thread-id\n", stderr: "" })
         .mockResolvedValueOnce({ stdout: "done\n", stderr: "" });
@@ -279,16 +278,14 @@ describe("WorkspacePoolService", () => {
       const config = makeConfig({
         workspacesRoot,
         dindHomePath,
-        defaultAgentModel: "claude",
-        defaultAgentForce: true,
-        defaultAgentSandbox: "disabled"
+        defaultAgentModel: "claude"
       });
       const service = new WorkspacePoolService(config);
       const result = await service.runAgent("ctr", "prompt");
 
-      expect(result.model).toBe("claude");
-      expect(result.force).toBe(true);
-      expect(result.sandbox).toBe("disabled");
+      expect(result.containerId).toBe("ctr");
+      expect(result.prompt).toBe("prompt");
+      expect(result.stdout).toBe("done\n");
     });
 
     it("throws when thread creation returns empty output", async () => {

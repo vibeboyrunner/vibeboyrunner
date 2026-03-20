@@ -4,6 +4,7 @@ import path from "path";
 import os from "os";
 import { RuntimeInjector } from "../../services/runtimeInjector";
 import { ManagerConfig } from "../../types";
+import { CursorAgentProvider } from "../../providers";
 
 vi.mock("../../utils/process", () => ({
   runCommand: vi.fn()
@@ -16,6 +17,8 @@ vi.mock("../../utils/logger", () => ({
 import { runCommand } from "../../utils/process";
 const mockRunCommand = vi.mocked(runCommand);
 
+const defaultProvider = new CursorAgentProvider("");
+
 function makeConfig(overrides: Partial<ManagerConfig> = {}): ManagerConfig {
   return {
     managerPort: 18080,
@@ -25,9 +28,8 @@ function makeConfig(overrides: Partial<ManagerConfig> = {}): ManagerConfig {
     portPoolEnd: 20499,
     dindHomePath: "/.vibeboyrunner",
     appComposeServiceName: "app",
+    agentProvider: "cursor",
     defaultAgentModel: "",
-    defaultAgentForce: true,
-    defaultAgentSandbox: "disabled",
     ...overrides
   };
 }
@@ -47,7 +49,7 @@ describe("RuntimeInjector", () => {
   describe("ensureSharedServicesMountOverride", () => {
     it("writes override YAML for workspace-level pool", async () => {
       const config = makeConfig({ dindHomePath: tmpDir, appComposeServiceName: "app" });
-      const injector = new RuntimeInjector(config);
+      const injector = new RuntimeInjector(config, defaultProvider);
       const configRoot = path.join(tmpDir, "configRoot");
       await fs.mkdir(configRoot, { recursive: true });
 
@@ -67,7 +69,7 @@ describe("RuntimeInjector", () => {
 
     it("writes override YAML for feature-level pool", async () => {
       const config = makeConfig({ dindHomePath: tmpDir, appComposeServiceName: "app" });
-      const injector = new RuntimeInjector(config);
+      const injector = new RuntimeInjector(config, defaultProvider);
       const configRoot = path.join(tmpDir, "configRoot");
       await fs.mkdir(configRoot, { recursive: true });
 
@@ -86,7 +88,7 @@ describe("RuntimeInjector", () => {
 
     it("creates the worker dot-cursor directory", async () => {
       const config = makeConfig({ dindHomePath: tmpDir });
-      const injector = new RuntimeInjector(config);
+      const injector = new RuntimeInjector(config, defaultProvider);
       const configRoot = path.join(tmpDir, "configRoot");
       await fs.mkdir(configRoot, { recursive: true });
 
@@ -102,7 +104,7 @@ describe("RuntimeInjector", () => {
 
     it("adds override file to .gitignore", async () => {
       const config = makeConfig({ dindHomePath: tmpDir });
-      const injector = new RuntimeInjector(config);
+      const injector = new RuntimeInjector(config, defaultProvider);
       const configRoot = path.join(tmpDir, "configRoot");
       await fs.mkdir(configRoot, { recursive: true });
 
@@ -114,7 +116,7 @@ describe("RuntimeInjector", () => {
 
     it("does not duplicate .gitignore entry on repeated calls", async () => {
       const config = makeConfig({ dindHomePath: tmpDir });
-      const injector = new RuntimeInjector(config);
+      const injector = new RuntimeInjector(config, defaultProvider);
       const configRoot = path.join(tmpDir, "configRoot");
       await fs.mkdir(configRoot, { recursive: true });
 
@@ -128,7 +130,7 @@ describe("RuntimeInjector", () => {
 
     it("uses custom appComposeServiceName in override", async () => {
       const config = makeConfig({ dindHomePath: tmpDir, appComposeServiceName: "web" });
-      const injector = new RuntimeInjector(config);
+      const injector = new RuntimeInjector(config, defaultProvider);
       const configRoot = path.join(tmpDir, "configRoot");
       await fs.mkdir(configRoot, { recursive: true });
 
@@ -143,7 +145,7 @@ describe("RuntimeInjector", () => {
   describe("getAppServiceContainerId", () => {
     it("returns trimmed container ID", async () => {
       mockRunCommand.mockResolvedValue({ stdout: "  abc123def  \n", stderr: "" });
-      const injector = new RuntimeInjector(makeConfig());
+      const injector = new RuntimeInjector(makeConfig(), defaultProvider);
 
       const id = await injector.getAppServiceContainerId("/path/docker-compose.yml");
       expect(id).toBe("abc123def");
@@ -151,7 +153,7 @@ describe("RuntimeInjector", () => {
 
     it("passes override path when provided", async () => {
       mockRunCommand.mockResolvedValue({ stdout: "abc123\n", stderr: "" });
-      const injector = new RuntimeInjector(makeConfig());
+      const injector = new RuntimeInjector(makeConfig(), defaultProvider);
 
       await injector.getAppServiceContainerId("/path/docker-compose.yml", "/path/override.yml");
       expect(mockRunCommand).toHaveBeenCalledWith(
@@ -163,7 +165,7 @@ describe("RuntimeInjector", () => {
 
     it("throws when no container is found", async () => {
       mockRunCommand.mockResolvedValue({ stdout: "", stderr: "" });
-      const injector = new RuntimeInjector(makeConfig());
+      const injector = new RuntimeInjector(makeConfig(), defaultProvider);
 
       await expect(injector.getAppServiceContainerId("/path/docker-compose.yml")).rejects.toThrow(
         "No running container found"
@@ -174,7 +176,7 @@ describe("RuntimeInjector", () => {
   describe("injectIntoAppContainer", () => {
     it("returns empty warnings on clean exec", async () => {
       mockRunCommand.mockResolvedValue({ stdout: "ok\n", stderr: "" });
-      const injector = new RuntimeInjector(makeConfig());
+      const injector = new RuntimeInjector(makeConfig(), defaultProvider);
 
       const warnings = await injector.injectIntoAppContainer("abc123", "my-app", "ws");
       expect(warnings).toEqual([]);
@@ -185,7 +187,7 @@ describe("RuntimeInjector", () => {
         stdout: "ok\nWARN: cannot install gh as non-root\n",
         stderr: "WARN: agent command exists but is not functional (likely libc mismatch)\n"
       });
-      const injector = new RuntimeInjector(makeConfig());
+      const injector = new RuntimeInjector(makeConfig(), defaultProvider);
 
       const warnings = await injector.injectIntoAppContainer("abc123", "my-app", "ws");
       expect(warnings).toHaveLength(2);
@@ -195,7 +197,7 @@ describe("RuntimeInjector", () => {
 
     it("catches exec failure and returns it as a warning", async () => {
       mockRunCommand.mockRejectedValue(new Error("container not running"));
-      const injector = new RuntimeInjector(makeConfig());
+      const injector = new RuntimeInjector(makeConfig(), defaultProvider);
 
       const warnings = await injector.injectIntoAppContainer("abc123", "my-app", "ws");
       expect(warnings).toHaveLength(1);

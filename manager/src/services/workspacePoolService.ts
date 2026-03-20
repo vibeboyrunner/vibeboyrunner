@@ -3,6 +3,7 @@ import path from "path";
 import { ManagerConfig, AppConfig, AppResult } from "../types";
 import { log } from "../utils/logger";
 import { runCommand } from "../utils/process";
+import { createAgentProvider, AgentProvider } from "../providers";
 import { PortAllocator } from "./portAllocator";
 import { RuntimeInjector } from "./runtimeInjector";
 
@@ -19,12 +20,9 @@ interface DockerPsResult {
   containers: Record<string, string>[];
 }
 
-interface AgentRunResult {
+export interface AgentRunResult {
   containerId: string;
   threadId: string;
-  model: string;
-  force: boolean;
-  sandbox: string;
   prompt: string;
   stdout: string;
   stderr: string;
@@ -33,10 +31,12 @@ interface AgentRunResult {
 export class WorkspacePoolService {
   private readonly allocator: PortAllocator;
   private readonly runtimeInjector: RuntimeInjector;
+  private readonly agentProvider: AgentProvider;
 
   constructor(private readonly config: ManagerConfig) {
+    this.agentProvider = createAgentProvider(config.agentProvider, config.defaultAgentModel);
     this.allocator = new PortAllocator(config.portPoolStart, config.portPoolEnd);
-    this.runtimeInjector = new RuntimeInjector(config);
+    this.runtimeInjector = new RuntimeInjector(config, this.agentProvider);
   }
 
   async up(workspaceName: string): Promise<WorkspacePoolResult> {
@@ -241,69 +241,31 @@ export class WorkspacePoolService {
     prompt: string,
     threadId?: string,
     model?: string,
-    force?: boolean,
-    sandbox?: string
+    providerOptions?: Record<string, unknown>
   ): Promise<AgentRunResult> {
-    const effectiveThreadId = threadId || (await this.createAgentThread(containerId));
-    const effectiveModel = (model || this.config.defaultAgentModel || "").trim();
-    const effectiveForce = typeof force === "boolean" ? force : this.config.defaultAgentForce;
-    const effectiveSandbox = (sandbox || this.config.defaultAgentSandbox || "").trim();
+    const effectiveThreadId = threadId || (await this.agentProvider.createThread(containerId));
 
     log("INFO", "Running agent in app container", {
       containerId,
       threadId: effectiveThreadId,
-      model: effectiveModel || "default",
-      force: effectiveForce,
-      sandbox: effectiveSandbox || "default",
+      provider: this.agentProvider.name,
       promptLength: prompt.length
     });
 
-    const agentArgs = ["exec", containerId, "agent", "--trust"];
-    if (effectiveModel) {
-      agentArgs.push("--model", effectiveModel);
-    }
-    if (effectiveForce) {
-      agentArgs.push("--force");
-    }
-    if (effectiveSandbox) {
-      agentArgs.push("--sandbox", effectiveSandbox);
-    }
-    agentArgs.push("--resume", effectiveThreadId, "chat", prompt);
-
-    const { stdout, stderr } = await runCommand("docker", agentArgs, { env: process.env });
+    const result = await this.agentProvider.runChat(containerId, {
+      threadId: effectiveThreadId,
+      prompt,
+      model,
+      providerOptions
+    });
 
     return {
       containerId,
-      threadId: effectiveThreadId,
-      model: effectiveModel,
-      force: effectiveForce,
-      sandbox: effectiveSandbox,
+      threadId: result.threadId,
       prompt,
-      stdout,
-      stderr
+      stdout: result.stdout,
+      stderr: result.stderr
     };
-  }
-
-  private async createAgentThread(containerId: string): Promise<string> {
-    const { stdout } = await runCommand("docker", ["exec", containerId, "agent", "--trust", "create-chat"], {
-      env: process.env
-    });
-
-    const lines = stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    const uuidLike = lines.find((line) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(line)
-    );
-    const chatId = uuidLike || lines.at(-1);
-
-    if (!chatId) {
-      throw new Error("Failed to create agent chat thread: empty output");
-    }
-
-    return chatId;
   }
 
   private async getAppsRoot(workspaceName: string, featureName?: string): Promise<string> {

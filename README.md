@@ -1,12 +1,12 @@
 # VibeBoyRunner
 
-[tests](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=branch%3Amain)
-[publish](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/publish.yml)
-[release](https://github.com/vibeboyrunner/vibeboyrunner/releases/latest)
-[docker](https://hub.docker.com/r/vibeboyrunner/vibeboyrunner)
-[license](LICENSE)
+[![tests](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/test.yml?branch=main&label=tests)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/test.yml?query=branch%3Amain)
+[![publish](https://img.shields.io/github/actions/workflow/status/vibeboyrunner/vibeboyrunner/publish.yml?label=publish)](https://github.com/vibeboyrunner/vibeboyrunner/actions/workflows/publish.yml)
+[![release](https://img.shields.io/github/v/release/vibeboyrunner/vibeboyrunner?label=release)](https://github.com/vibeboyrunner/vibeboyrunner/releases/latest)
+[![docker](https://img.shields.io/docker/v/vibeboyrunner/vibeboyrunner?label=docker&sort=semver)](https://hub.docker.com/r/vibeboyrunner/vibeboyrunner)
+[![license](https://img.shields.io/github/license/vibeboyrunner/vibeboyrunner)](LICENSE)
 
-An AI-powered development environment that orchestrates worker agents inside containers. VibeBoyRunner runs a Docker-in-Docker container with a built-in manager service, giving AI agents (like the Cursor Agent) full access to isolated Docker environments for building and running your apps..
+An AI-powered development environment that orchestrates worker agents inside containers. VibeBoyRunner runs a Docker-in-Docker container with a built-in manager service, giving AI agents (like the Cursor Agent) full access to isolated Docker environments for building and running your apps.
 
 ## Prerequisites
 

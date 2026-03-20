@@ -10,7 +10,8 @@ describe("getConfig", () => {
         key.startsWith("MANAGER_") ||
         key.startsWith("DIND_") ||
         key.startsWith("PORT_POOL_") ||
-        key === "APP_COMPOSE_SERVICE_NAME"
+        key === "APP_COMPOSE_SERVICE_NAME" ||
+        key === "AGENT_PROVIDERS"
       ) {
         delete process.env[key];
       }
@@ -30,9 +31,8 @@ describe("getConfig", () => {
     expect(config.portPoolEnd).toBe(20499);
     expect(config.dindHomePath).toBe("/.vibeboyrunner");
     expect(config.appComposeServiceName).toBe("app");
+    expect(config.agentProvider).toBe("cursor");
     expect(config.defaultAgentModel).toBe("");
-    expect(config.defaultAgentForce).toBe(true);
-    expect(config.defaultAgentSandbox).toBe("disabled");
   });
 
   it("reads MANAGER_PORT from env", () => {
@@ -80,21 +80,13 @@ describe("getConfig", () => {
     expect(config.appComposeServiceName).toBe("web");
   });
 
-  describe("parseBoolean via defaultAgentForce", () => {
-    it.each(["true", "1", "yes", "on", "TRUE", "  True  "])("parses '%s' as true", (value) => {
-      process.env.MANAGER_AGENT_FORCE = value;
-      expect(getConfig().defaultAgentForce).toBe(true);
-    });
+  it("reads AGENT_PROVIDERS from env (first entry)", () => {
+    process.env.AGENT_PROVIDERS = "claude,cursor";
+    expect(getConfig().agentProvider).toBe("claude");
+  });
 
-    it.each(["false", "0", "no", "off", "FALSE", "  False  "])("parses '%s' as false", (value) => {
-      process.env.MANAGER_AGENT_FORCE = value;
-      expect(getConfig().defaultAgentForce).toBe(false);
-    });
-
-    it("falls back to default for unrecognized value", () => {
-      process.env.MANAGER_AGENT_FORCE = "maybe";
-      expect(getConfig().defaultAgentForce).toBe(true);
-    });
+  it("defaults agentProvider to cursor", () => {
+    expect(getConfig().agentProvider).toBe("cursor");
   });
 
   it("reads agent model from env", () => {
@@ -107,8 +99,8 @@ describe("getConfig", () => {
     expect(getConfig().defaultAgentModel).toBe("gpt-4");
   });
 
-  it("reads agent sandbox from env", () => {
-    process.env.MANAGER_AGENT_SANDBOX = "enabled";
-    expect(getConfig().defaultAgentSandbox).toBe("enabled");
+  it("trims AGENT_PROVIDERS whitespace", () => {
+    process.env.AGENT_PROVIDERS = "  cursor  ";
+    expect(getConfig().agentProvider).toBe("cursor");
   });
 });

@@ -21,8 +21,14 @@ export async function handleAgentRoutes(
     const prompt = String(body.prompt || "").trim();
     const threadId = String(body.threadId || "").trim();
     const model = String(body.model || "").trim();
-    const force = body.force;
-    const sandbox = String(body.sandbox || "").trim();
+
+    const providerOptions: Record<string, unknown> = {};
+    if (typeof body.force === "boolean") {
+      providerOptions.force = body.force;
+    }
+    if (typeof body.sandbox === "string" && body.sandbox.trim()) {
+      providerOptions.sandbox = body.sandbox.trim();
+    }
 
     if (!containerId) {
       sendJson(res, 400, { ok: false, error: "containerId is required" });
@@ -39,8 +45,7 @@ export async function handleAgentRoutes(
       prompt,
       threadId || undefined,
       model || undefined,
-      typeof force === "boolean" ? force : undefined,
-      sandbox || undefined
+      Object.keys(providerOptions).length > 0 ? providerOptions : undefined
     );
     sendJson(res, 200, { ok: true, ...result });
     return { handled: true };
