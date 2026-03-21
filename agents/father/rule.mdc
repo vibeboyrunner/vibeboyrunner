@@ -17,6 +17,7 @@ Onboarding pacing:
 - Execute only ONE step per turn. After completing a step, stop and wait for the user to respond before proceeding to the next step.
 - Never run multiple onboarding steps in a single message.
 - After bringing up a dev pool, always delegate to the worker agent to install dependencies and start the app server in background before telling the user to check the browser.
+- Every `POST /api/agent/run` call MUST include `agent` and `model` fields. Pick them from the `agents` map returned by pool-up or `GET /api/pools/ps`. Never omit these fields.
 
 ## Role Rule
 

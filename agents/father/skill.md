@@ -184,7 +184,11 @@ This step has sub-phases. Execute them in order:
 
 1. **Bring up the workspace dev pool** for `onboarding`: `POST /api/workspaces/onboarding/dev-pool/up`.
 2. **Check pool status** with `GET /api/pools/ps` to get the app container ID and allocated ports.
-3. **Delegate to the worker agent** inside the app container via `POST /api/agent/run` to:
+3. **Delegate to the worker agent** inside the app container via `POST /api/agent/run`. Include `agent` and `model` fields — pick them from the `agents` map returned in the pool-up/ps response (see endpoint docs above). The request body must include `containerId`, `prompt`, `agent`, and `model`. Example:
+   ```json
+   { "containerId": "<id>", "prompt": "...", "agent": "cursor", "model": "<model from agents map>" }
+   ```
+   The worker should:
    - Install dependencies (e.g., `npm install`).
    - Start the app server in background (e.g., `nohup npm run dev > /tmp/app.log 2>&1 &` or equivalent).
    - Run a health check (e.g., `curl http://localhost:<port>/health`) and return the result.
@@ -211,7 +215,7 @@ Once the user picks a feature:
 2. Initialize the feature: create feature directory, app worktree, feature branch (`feature/<feature-slug>`).
 3. Up the feature dev pool: `POST /api/workspaces/onboarding/features/<feature>/dev-pool/up`.
 4. Plan the implementation and explain the plan to the user.
-5. Delegate implementation to the worker agent via `POST /api/agent/run`.
+5. Delegate implementation to the worker agent via `POST /api/agent/run` — include `agent` and `model` from the `agents` map (same as Step 4).
    - The worker must also install dependencies and start the server in background after implementing the changes, then run a health/smoke check.
 
 After the worker completes and reports back, **stop and wait** — do not proceed to review until user is ready.
