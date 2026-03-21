@@ -1,5 +1,12 @@
-import { AgentProvider, AgentChatOptions, AgentRunResult, AgentServicePaths } from "./agentProvider";
-import { runCommand } from "../utils/process";
+import {
+  AgentProvider,
+  AgentChatOptions,
+  AgentRunResult,
+  AgentServicePaths,
+  AgentStreamChannel,
+  AgentUnifiedStreamEvent
+} from "./agentProvider";
+import { runCommand, runCommandStreaming } from "../utils/process";
 
 export class CursorAgentProvider implements AgentProvider {
   readonly name = "cursor";
@@ -75,6 +82,200 @@ export class CursorAgentProvider implements AgentProvider {
       stdout,
       stderr
     };
+  }
+
+  async runChatStream(
+    containerId: string,
+    options: AgentChatOptions,
+    onStdout: (chunk: string) => void,
+    onStderr: (chunk: string) => void
+  ): Promise<AgentRunResult> {
+    const model = (options.model || this.defaultModel || "").trim();
+    const force =
+      typeof options.providerOptions?.force === "boolean" ? options.providerOptions.force : this.defaultForce;
+    const sandbox = (
+      (typeof options.providerOptions?.sandbox === "string" ? options.providerOptions.sandbox : "") ||
+      this.defaultSandbox
+    ).trim();
+
+    const agentArgs = [
+      "exec",
+      containerId,
+      "agent",
+      "--trust",
+      "--print",
+      "--output-format",
+      "stream-json",
+      "--stream-partial-output"
+    ];
+    if (model) {
+      agentArgs.push("--model", model);
+    }
+    if (force) {
+      agentArgs.push("--force");
+    }
+    if (sandbox) {
+      agentArgs.push("--sandbox", sandbox);
+    }
+    agentArgs.push("--resume", options.threadId, options.prompt);
+
+    let stdoutBuffer = "";
+    let streamedText = "";
+    let resultText = "";
+
+    const flushJsonLines = (): void => {
+      let newlineIdx = stdoutBuffer.indexOf("\n");
+      while (newlineIdx !== -1) {
+        const line = stdoutBuffer.slice(0, newlineIdx).trim();
+        stdoutBuffer = stdoutBuffer.slice(newlineIdx + 1);
+        if (line.length > 0) {
+          this.handleStreamJsonLine(
+            line,
+            (text) => {
+              streamedText += text;
+              onStdout(text);
+            },
+            (text) => {
+              onStderr(text);
+            },
+            (text) => {
+              resultText = text;
+            }
+          );
+        }
+        newlineIdx = stdoutBuffer.indexOf("\n");
+      }
+    };
+
+    const { stderr } = await runCommandStreaming("docker", agentArgs, {
+      env: process.env,
+      timeoutMs: 300_000,
+      onStdout: (chunk) => {
+        stdoutBuffer += chunk;
+        flushJsonLines();
+      },
+      onStderr
+    });
+
+    const trailing = stdoutBuffer.trim();
+    if (trailing.length > 0) {
+      this.handleStreamJsonLine(
+        trailing,
+        (text) => {
+          streamedText += text;
+          onStdout(text);
+        },
+        (text) => {
+          onStderr(text);
+        },
+        (text) => {
+          resultText = text;
+        }
+      );
+    }
+
+    const finalStdout = streamedText || resultText;
+
+    return {
+      threadId: options.threadId,
+      stdout: finalStdout,
+      stderr
+    };
+  }
+
+  private handleStreamJsonLine(
+    line: string,
+    onAssistantText: (text: string) => void,
+    onSystemLog: (text: string) => void,
+    onResultText: (text: string) => void
+  ): void {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      return;
+    }
+
+    if (parsed?.type === "assistant") {
+      const content = Array.isArray(parsed?.message?.content) ? parsed.message.content : [];
+      const text = content
+        .filter((item: any) => item?.type === "text" && typeof item?.text === "string")
+        .map((item: any) => String(item.text))
+        .join("");
+      if (!text) return;
+
+      const isPartialDelta = typeof parsed?.timestamp_ms === "number";
+      if (isPartialDelta) {
+        onAssistantText(text);
+      }
+      return;
+    }
+
+    if (parsed?.type === "result" && parsed?.subtype === "success" && typeof parsed?.result === "string") {
+      onResultText(parsed.result);
+      return;
+    }
+
+    if (parsed?.type === "tool_call") {
+      const subtype = String(parsed?.subtype || "");
+      const toolName = this.getToolCallName(parsed?.tool_call);
+      if (subtype === "started") {
+        onSystemLog(`[tool:start] ${toolName}\n`);
+        return;
+      }
+      if (subtype === "completed") {
+        const status = this.getToolCallStatus(parsed?.tool_call);
+        onSystemLog(`[tool:done] ${toolName} (${status})\n`);
+        return;
+      }
+    }
+
+    if (parsed?.type === "thinking" && parsed?.subtype === "delta" && typeof parsed?.text === "string") {
+      // Keep streaming useful but lightweight: expose only short thinking snippets.
+      const text = parsed.text.trim();
+      if (text.length > 0) {
+        onSystemLog(`[thinking] ${text}\n`);
+      }
+    }
+  }
+
+  private getToolCallName(toolCall: any): string {
+    if (!toolCall || typeof toolCall !== "object") return "tool";
+    if (toolCall.shellToolCall) return "shell";
+    if (toolCall.readToolCall) return "read";
+    if (toolCall.globToolCall) return "glob";
+    if (toolCall.rgToolCall) return "rg";
+    if (toolCall.editToolCall) return "edit";
+    if (toolCall.applyPatchToolCall) return "apply_patch";
+    return "tool";
+  }
+
+  private getToolCallStatus(toolCall: any): string {
+    if (!toolCall || typeof toolCall !== "object") return "unknown";
+    const candidates = [
+      toolCall.shellToolCall?.result,
+      toolCall.readToolCall?.result,
+      toolCall.globToolCall?.result,
+      toolCall.rgToolCall?.result,
+      toolCall.editToolCall?.result,
+      toolCall.applyPatchToolCall?.result
+    ];
+    for (const result of candidates) {
+      if (!result || typeof result !== "object") continue;
+      if (result.success) return "success";
+      if (result.rejected) return "rejected";
+      if (result.error) return "error";
+      if (result.timeout) return "timeout";
+    }
+    return "unknown";
+  }
+
+  formatStreamChunk(channel: AgentStreamChannel, chunk: string): AgentUnifiedStreamEvent[] {
+    if (!chunk) return [];
+    if (channel === "stdout") {
+      return [{ type: "assistant_text", text: chunk, stream: "stdout" }];
+    }
+    return [{ type: "system_log", text: chunk, stream: "stderr" }];
   }
 
   getServicePaths(): AgentServicePaths {

@@ -37,6 +37,30 @@ seed_file_if_missing() {
   fi
 }
 
+sync_file_from_template() {
+  local template_path="$1"
+  local target_path="$2"
+
+  ensure_dir "$(dirname "$target_path")"
+
+  if [ ! -f "$template_path" ]; then
+    if [ ! -e "$target_path" ]; then
+      touch "$target_path"
+      log WARN "Template missing; created empty file: ${target_path}"
+    else
+      log WARN "Template missing; keeping existing file: ${target_path}"
+    fi
+    return
+  fi
+
+  if [ -f "$target_path" ] && cmp -s "$template_path" "$target_path"; then
+    return
+  fi
+
+  cp "$template_path" "$target_path"
+  log INFO "Synced file from template: ${target_path}"
+}
+
 ensure_symlink() {
   local source_path="$1"
   local target_path="$2"
@@ -66,8 +90,8 @@ init_agents_store() {
   local father_rule="${father_root}/rule.mdc"
 
   ensure_dir "$father_root"
-  seed_file_if_missing "${father_template_root}/skill.md" "$father_skill"
-  seed_file_if_missing "${father_template_root}/rule.mdc" "$father_rule"
+  sync_file_from_template "${father_template_root}/skill.md" "$father_skill"
+  sync_file_from_template "${father_template_root}/rule.mdc" "$father_rule"
 
   log INFO "Initialized agents store at ${agents_root}"
 }
@@ -136,25 +160,10 @@ init_services() {
 
 init_workspaces() {
   ensure_dir "${DIND_WORKSPACES_PATH}"
-
-  local has_workspace="false"
-  local candidate
-  for candidate in "${DIND_WORKSPACES_PATH}"/*; do
-    if [ -d "$candidate" ]; then
-      has_workspace="true"
-      break
-    fi
-  done
-
-  if [ "$has_workspace" = "false" ]; then
-    ensure_dir "${DIND_WORKSPACES_PATH}/onboarding/apps"
-    ensure_dir "${DIND_WORKSPACES_PATH}/onboarding/features"
-    log INFO "No workspaces found; created onboarding workspace scaffold"
-  else
-    log INFO "Existing workspaces detected"
-  fi
+  log INFO "Workspace root ready (no onboarding scaffold auto-created)"
 
   # Backfill required workspace structure for both existing and new workspaces.
+  local candidate
   for candidate in "${DIND_WORKSPACES_PATH}"/*; do
     if [ -d "$candidate" ]; then
       ensure_dir "${candidate}/apps"

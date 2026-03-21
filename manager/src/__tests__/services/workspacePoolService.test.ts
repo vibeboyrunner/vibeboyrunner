@@ -6,7 +6,8 @@ import { WorkspacePoolService } from "../../services/workspacePoolService";
 import { ManagerConfig } from "../../types";
 
 vi.mock("../../utils/process", () => ({
-  runCommand: vi.fn()
+  runCommand: vi.fn(),
+  runCommandStreaming: vi.fn()
 }));
 
 vi.mock("../../utils/logger", () => ({
@@ -26,8 +27,9 @@ vi.mock("net", () => {
   return { default: mock, ...mock };
 });
 
-import { runCommand } from "../../utils/process";
+import { runCommand, runCommandStreaming } from "../../utils/process";
 const mockRunCommand = vi.mocked(runCommand);
+const mockRunCommandStreaming = vi.mocked(runCommandStreaming);
 
 function makeConfig(overrides: Partial<ManagerConfig> = {}): ManagerConfig {
   return {
@@ -58,6 +60,10 @@ describe("WorkspacePoolService", () => {
     await fs.mkdir(dindHomePath, { recursive: true });
 
     mockRunCommand.mockResolvedValue({ stdout: "", stderr: "" });
+    mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+      options?.onStdout?.("");
+      return { stdout: "", stderr: "" };
+    });
   });
 
   afterEach(async () => {
@@ -285,6 +291,7 @@ describe("WorkspacePoolService", () => {
       });
 
       expect(result.containerId).toBe("ctr123");
+      expect(result.provider).toBe("cursor");
       expect(result.prompt).toBe("do something");
       expect(result.threadId).toBe("thread-1");
       expect(result.stdout).toContain("Agent output");
@@ -316,6 +323,7 @@ describe("WorkspacePoolService", () => {
       const result = await service.runAgent("ctr", "prompt");
 
       expect(result.containerId).toBe("ctr");
+      expect(result.provider).toBe("cursor");
       expect(result.prompt).toBe("prompt");
       expect(result.stdout).toBe("done\n");
     });
@@ -327,6 +335,48 @@ describe("WorkspacePoolService", () => {
       const service = new WorkspacePoolService(config);
 
       await expect(service.runAgent("ctr", "prompt")).rejects.toThrow("Failed to create agent chat thread");
+    });
+
+    it("streams agent output chunks when requested", async () => {
+      mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+        options?.onStdout?.(
+          '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"chunk-a"}]},"timestamp_ms":1}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"tool_call","subtype":"started","tool_call":{"shellToolCall":{"args":{"command":"pwd"}}}}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"tool_call","subtype":"completed","tool_call":{"shellToolCall":{"result":{"success":{"exitCode":0}}}}}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"result","subtype":"success","result":"chunk-a"}\n'
+        );
+        options?.onStderr?.("chunk-b");
+        return { stdout: "", stderr: "chunk-b" };
+      });
+
+      const config = makeConfig({ workspacesRoot, dindHomePath });
+      const service = new WorkspacePoolService(config);
+      const stdoutChunks: string[] = [];
+      const stderrChunks: string[] = [];
+      const result = await service.runAgentStream(
+        "ctr123",
+        "do something",
+        {
+          onStdout: (chunk) => stdoutChunks.push(chunk),
+          onStderr: (chunk) => stderrChunks.push(chunk)
+        },
+        "thread-1"
+      );
+
+      expect(result.threadId).toBe("thread-1");
+      expect(result.provider).toBe("cursor");
+      expect(stdoutChunks.join("")).toContain("chunk-a");
+      expect(stderrChunks.join("")).toContain("[tool:start] shell");
+      expect(stderrChunks.join("")).toContain("[tool:done] shell (success)");
+      expect(stderrChunks.join("")).toContain("chunk-b");
+      expect(result.stdout).toBe("chunk-a");
+      expect(result.stderr).toBe("chunk-b");
     });
   });
 });

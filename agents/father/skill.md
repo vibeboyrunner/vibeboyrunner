@@ -51,9 +51,23 @@ Use these endpoints as your default control plane:
 - `POST /api/workspaces/:workspace/features/:feature/dev-pool/down`
 - `POST /api/agent/run`
   - body: `containerId`, `prompt`, optional `threadId`, optional `model`, optional `agent`
-  - **Agent & model selection**: pool up/down and `GET /api/pools/ps` responses include an `agents` map keyed by provider name, e.g. `{ "cursor": { "models": [...], "defaultModel": "..." } }`. Always set `agent` to one of the keys from this map. Pick `model` only from that agent's `models` list. If the user has a preferred model that appears in the list, set `model` explicitly; otherwise omit it to use `defaultModel`.
-  - never try to read model from shell env vars; the manager handles the default internally
+  - when invoking via `curl` and expecting streamed output visibility in terminal, always use `-N` (and prefer `--no-buffer`)
+  - **Agent & model selection**: pool up/down and `GET /api/pools/ps` responses include an `agents` map keyed by provider name, e.g. `{ "cursor": { "models": [...], "defaultModel": "..." } }`.
+  - always set both `agent` and `model` explicitly for worker runs
   - never invent or guess agent or model names — always pick from the `agents` map returned by the manager
+  - model choice policy:
+    - easy/low-risk tasks (single-file tweaks, copy updates, tiny refactors): choose a faster/cheaper model from the list (prefer names containing `fast`, `mini`, `low`, or provider equivalent)
+    - medium tasks (multi-file feature work, moderate refactors): choose the provider `defaultModel` when reasonable
+    - complex/high-risk tasks (architecture-heavy changes, migrations, tricky debugging): choose the most capable/latest model available (prefer names containing `xhigh`, `high-thinking`, `max`, `pro`, or newest generation in that provider list)
+  - when unsure between cost and quality, ask the user before running a long/expensive worker task
+
+Streaming request example (terminal-visible chunks):
+
+```bash
+curl -sS -N --no-buffer -X POST "http://127.0.0.1:${MANAGER_PORT}/api/agent/run" \
+  -H "Content-Type: application/json" \
+  -d '{"containerId":"<id>","prompt":"...","agent":"cursor","model":"<picked-model>"}'
+```
 
 Manager base URL:
 
@@ -123,9 +137,27 @@ Apply this flow strictly:
 
 ## Onboarding Flow
 
-When you detect the `onboarding` workspace exists and its `apps` directory is empty, this is a fresh installation. Start the onboarding flow instead of the standard workflow.
+Onboarding is explicit user intent only.
 
-**Pacing rule:** The onboarding is a guided, step-by-step experience. After completing each step, STOP and wait for the user to explicitly acknowledge or confirm before moving to the next step. Never execute multiple steps in a single turn. Present one step, explain it, then end your message and wait for the user's response.
+- Start onboarding only when the user clearly asks for it (for example: "start onboarding", "let's do onboarding", "Hey, let's start onboarding!").
+- Do not auto-trigger onboarding on greetings.
+- If user does not request onboarding, continue directly with the standard workflow.
+- If onboarding starts and workspace structure is missing, create it first:
+  - `mkdir -p workspaces/onboarding/apps workspaces/onboarding/features`
+
+Before starting Step 1, ask the user to choose onboarding mode:
+
+- **Detailed mode (step-by-step)** — the guided flow with confirmations between steps.
+- **Fast-forward mode** — run the full onboarding flow end-to-end with minimal interruptions and no per-step confirmation prompts.
+- **Skip onboarding** — skip the guided demo and continue directly to standard workflow.
+
+If the user does not choose explicitly, default to **Detailed mode**.
+
+If the user chooses **Skip onboarding**, confirm it was skipped intentionally and continue immediately with the standard workflow.
+
+**Pacing rule:** Follow the selected mode strictly.
+- In **Detailed mode**, execute one step at a time, then stop and wait for explicit user acknowledgement before continuing.
+- In **Fast-forward mode**, continue automatically through steps and only pause when blocked by required external user actions (for example auth login or browser verification).
 
 ### Step 1 — Auth Check and Setup
 
@@ -144,7 +176,8 @@ After running both checks, report the results **and immediately provide the exac
 
 If both are already authenticated, say so and skip the auth commands.
 
-**Stop and wait** for the user to confirm they have completed authentication (or acknowledged if already authenticated).
+In **Detailed mode**, stop and wait for the user to confirm they have completed authentication (or acknowledged if already authenticated).
+In **Fast-forward mode**, continue immediately if both checks pass; if not, pause only until user completes required logins.
 
 After user confirms, re-run the auth checks to verify both pass. Do not proceed until both checks pass.
 
@@ -162,7 +195,7 @@ Explain the VibeBoyRunner system to the user. Cover each entity and why it exist
 
 Summarise the overall flow: **idea → workspace → apps → .vibeboyrunner config → feature → worker implements → test → PR/merge**.
 
-After presenting this overview, **stop and wait** for the user to acknowledge before continuing.
+After presenting this overview, stop and wait only in **Detailed mode**. In **Fast-forward mode**, continue to the next step automatically.
 
 ### Step 3 — Initialize Onboarding App
 
@@ -176,7 +209,7 @@ Clone the onboarding demo app from GitHub:
   - `docker-compose.yml` — how services are orchestrated.
   - `config.json` — port and env bindings that VibeBoyRunner uses to allocate resources.
 
-After presenting the cloned app and its config, **stop and wait** for user acknowledgement.
+After presenting the cloned app and its config, stop and wait only in **Detailed mode**. In **Fast-forward mode**, continue to the next step automatically.
 
 ### Step 4 — Start Dev Pool, Set Up App, and Verify
 
@@ -195,7 +228,7 @@ This step has sub-phases. Execute them in order:
 4. Once the worker confirms the server is running and healthy, tell the user the URL/port where the app is accessible (e.g., `http://localhost:<host-mapped-port>/hello?name=World`).
 5. Ask the user to open their browser and confirm the app is running.
 
-**Stop and wait** for explicit user confirmation before continuing.
+Stop and wait only in **Detailed mode**. In **Fast-forward mode**, continue automatically after reporting verification.
 
 ### Step 5 — Feature Ideation
 
@@ -205,7 +238,7 @@ After the user confirms the app is running:
 - Propose 3–4 simple but interesting options suitable for a quick demo (for example: dark mode toggle, user greeting personalisation, animated page transitions, colour theme picker).
 - Let the user pick one of the options or propose their own idea.
 
-**Stop and wait** for the user's choice before continuing.
+Stop and wait only in **Detailed mode**. In **Fast-forward mode**, pick a sensible default demo feature if the user does not provide one.
 
 ### Step 6 — Feature Implementation
 
@@ -218,14 +251,14 @@ Once the user picks a feature:
 5. Delegate implementation to the worker agent via `POST /api/agent/run` — include `agent` and `model` from the `agents` map (same as Step 4).
    - The worker must also install dependencies and start the server in background after implementing the changes, then run a health/smoke check.
 
-After the worker completes and reports back, **stop and wait** — do not proceed to review until user is ready.
+After the worker completes and reports back, stop and wait only in **Detailed mode**. In **Fast-forward mode**, proceed to review automatically.
 
 ### Step 7 — Review in Browser
 
 - Tell the user the URL/port and ask them to check the browser to see the updated app.
 - Briefly explain what the worker changed.
 
-**Stop and wait** for explicit user feedback (approval or revision requests).
+Stop and wait only in **Detailed mode**. In **Fast-forward mode**, proceed unless the user explicitly asks for revisions.
 
 ### Step 8 — Create PR
 
@@ -235,7 +268,7 @@ After the user approves the changes:
 - Create a PR via `gh pr create` with a `--body` that includes a clear description of the changes and ends with `Made with Vibeboyrunner`. Do not include "Made with Cursor" or any other attribution.
 - Share the PR link with the user.
 
-**Stop and wait** for user acknowledgement.
+Stop and wait only in **Detailed mode**. In **Fast-forward mode**, continue to completion automatically.
 
 ### Step 9 — Onboarding Complete
 

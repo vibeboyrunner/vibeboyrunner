@@ -106,6 +106,13 @@ export PATH="$HOME/.vibeboyrunner/bin:$PATH" && vibeboyrunner up
 
 This pulls the Vibeboyrunner Docker image (if not already present) and starts the container. The user should see output confirming the container started successfully, including an **"Open in Cursor"** deeplink.
 
+If you are in terminal mode and can run the command yourself:
+
+- Parse the `cursor://...` deeplink from command output.
+- Return it to the user as a clickable markdown link in this exact format:
+  - `[Open in Cursor](cursor://...)`
+- Also include the raw deeplink in inline code as fallback copy/paste.
+
 To check status at any time:
 
 ```
@@ -126,6 +133,12 @@ The `vibeboyrunner up` output includes an **"Open in Cursor"** deeplink. Tell th
 
 The link looks like: `cursor://vscode-remote/attached-container+<hex>/workdir?windowId=_blank`
 
+When sharing this with the user, always present it as:
+
+- `[Open in Cursor](cursor://vscode-remote/attached-container+<hex>/workdir?windowId=_blank)`
+
+If you cannot determine the exact deeplink value, ask the user to copy the full `cursor://...` line from `vibeboyrunner up` output and then re-share it as a markdown link.
+
 If the deeplink does not work (e.g., Cursor is not registered as a URI handler), fall back to the manual method:
 
 1. Open **Cursor IDE**.
@@ -141,7 +154,7 @@ If the deeplink does not work (e.g., Cursor is not registered as a URI handler),
 The user is now inside the Vibeboyrunner environment in Cursor. Tell them to:
 
 1. Open the Cursor Agent chat (Cmd+L / Ctrl+L or the chat panel).
-2. Say **Hello** — the Father Agent will detect this is a fresh installation and start the onboarding flow automatically.
+2. Say exactly: **Hey, let's start onboarding!** — this explicitly asks the Father Agent to run onboarding.
 
 The Father Agent takes over from here. The user is all set — happy coding!
 

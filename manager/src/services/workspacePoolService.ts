@@ -3,7 +3,7 @@ import path from "path";
 import { ManagerConfig, AppConfig, AppResult } from "../types";
 import { log } from "../utils/logger";
 import { runCommand } from "../utils/process";
-import { createAllAgentProviders, AgentProvider } from "../providers";
+import { createAllAgentProviders, AgentProvider, AgentUnifiedStreamEvent } from "../providers";
 import { PortAllocator } from "./portAllocator";
 import { RuntimeInjector } from "./runtimeInjector";
 
@@ -28,11 +28,18 @@ interface DockerPsResult {
 }
 
 export interface AgentRunResult {
+  provider: string;
   containerId: string;
   threadId: string;
   prompt: string;
   stdout: string;
   stderr: string;
+}
+
+export interface AgentRunStreamCallbacks {
+  onStdout: (chunk: string) => void;
+  onStderr: (chunk: string) => void;
+  onUnifiedEvent?: (event: AgentUnifiedStreamEvent & { provider: string }) => void;
 }
 
 export class WorkspacePoolService {
@@ -285,6 +292,78 @@ export class WorkspacePoolService {
     });
 
     return {
+      provider: provider.name,
+      containerId,
+      threadId: result.threadId,
+      prompt,
+      stdout: result.stdout,
+      stderr: result.stderr
+    };
+  }
+
+  async runAgentStream(
+    containerId: string,
+    prompt: string,
+    callbacks: AgentRunStreamCallbacks,
+    threadId?: string,
+    model?: string,
+    agent?: string,
+    providerOptions?: Record<string, unknown>
+  ): Promise<AgentRunResult> {
+    const provider = this.resolveProvider(agent);
+    const effectiveThreadId = threadId || (await provider.createThread(containerId));
+
+    log("INFO", "Running agent in app container (streaming)", {
+      containerId,
+      threadId: effectiveThreadId,
+      provider: provider.name,
+      promptLength: prompt.length
+    });
+
+    const runStream = provider.runChatStream;
+    if (!runStream) {
+      throw new Error(`Provider "${provider.name}" does not support streaming`);
+    }
+
+    const result = await runStream.call(
+      provider,
+      containerId,
+      {
+        threadId: effectiveThreadId,
+        prompt,
+        model,
+        providerOptions
+      },
+      (chunk) => {
+        callbacks.onStdout(chunk);
+        const formatter = provider.formatStreamChunk;
+        if (formatter && callbacks.onUnifiedEvent) {
+          const events = formatter.call(provider, "stdout", chunk);
+          for (const event of events) {
+            callbacks.onUnifiedEvent({
+              ...event,
+              provider: provider.name
+            });
+          }
+        }
+      },
+      (chunk) => {
+        callbacks.onStderr(chunk);
+        const formatter = provider.formatStreamChunk;
+        if (formatter && callbacks.onUnifiedEvent) {
+          const events = formatter.call(provider, "stderr", chunk);
+          for (const event of events) {
+            callbacks.onUnifiedEvent({
+              ...event,
+              provider: provider.name
+            });
+          }
+        }
+      }
+    );
+
+    return {
+      provider: provider.name,
       containerId,
       threadId: result.threadId,
       prompt,

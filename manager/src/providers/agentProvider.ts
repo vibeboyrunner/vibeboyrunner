@@ -11,6 +11,14 @@ export interface AgentRunResult {
   stderr: string;
 }
 
+export type AgentStreamChannel = "stdout" | "stderr";
+
+export interface AgentUnifiedStreamEvent {
+  type: "assistant_text" | "system_log";
+  text: string;
+  stream: AgentStreamChannel;
+}
+
 export interface AgentServicePaths {
   configLinkSource: string;
   configLinkTarget: string;
@@ -25,6 +33,13 @@ export interface AgentProvider {
   buildConfigScript(servicesPath: string): string;
   createThread(containerId: string): Promise<string>;
   runChat(containerId: string, options: AgentChatOptions): Promise<AgentRunResult>;
+  runChatStream?(
+    containerId: string,
+    options: AgentChatOptions,
+    onStdout: (chunk: string) => void,
+    onStderr: (chunk: string) => void
+  ): Promise<AgentRunResult>;
+  formatStreamChunk?(channel: AgentStreamChannel, chunk: string): AgentUnifiedStreamEvent[];
   getServicePaths(): AgentServicePaths;
   getAvailableModels(): string[];
 }

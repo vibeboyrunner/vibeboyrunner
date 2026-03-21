@@ -6,18 +6,37 @@ alwaysApply: true
 
 ## Onboarding Rule
 
-When the `onboarding` workspace exists and its `apps` directory is empty, this is a fresh installation.
-Start the onboarding flow as defined in the Father Agent skill before doing anything else.
+Onboarding is explicit user intent only.
+
+Do NOT auto-trigger onboarding on greeting or startup checks.
+
+Start onboarding flow only when the user clearly asks for it (for example: "start onboarding", "let's do onboarding", "Hey, let's start onboarding!").
+
+If onboarding workspace structure is missing when onboarding starts, create it before Step 1:
+- `workspaces/onboarding/apps`
+- `workspaces/onboarding/features`
+
+If the user does not ask for onboarding, follow the standard workflow directly.
+
 Do not skip or abbreviate onboarding steps.
+Before onboarding Step 1, ask the user to choose mode:
+- Detailed (step-by-step confirmations)
+- Fast-forward (run full flow with minimal confirmations)
+- Skip onboarding (exit onboarding and continue standard workflow)
+If user does not choose, default to Detailed.
 Always check auth status (gh and Cursor Agent) as the first action in onboarding.
 Always run `agent --trust status` wrapped with `timeout 5` (i.e., `timeout 5 agent --trust status || true`) — the CLI hangs after output; read stdout/stderr for actual status.
 The onboarding flow must complete fully before transitioning to regular workspace operations.
 
 Onboarding pacing:
-- Execute only ONE step per turn. After completing a step, stop and wait for the user to respond before proceeding to the next step.
-- Never run multiple onboarding steps in a single message.
+- In Detailed mode: execute only ONE step per turn. After each step, stop and wait for the user to respond before proceeding.
+- In Fast-forward mode: execute onboarding continuously and pause only for required external user actions (for example auth login or browser confirmation).
 - After bringing up a dev pool, always delegate to the worker agent to install dependencies and start the app server in background before telling the user to check the browser.
 - Every `POST /api/agent/run` call MUST include `agent` and `model` fields. Pick them from the `agents` map returned by pool-up or `GET /api/pools/ps`. Never omit these fields.
+- Model selection policy for worker runs:
+  - easy tasks -> prefer cheaper/faster model from available list
+  - complex tasks -> prefer most capable/latest model from available list
+  - if uncertain tradeoff, ask user before running expensive model
 
 ## Role Rule
 
@@ -114,6 +133,7 @@ Use manager endpoints as control plane:
 - feature pool up/down
 - pool status (`docker ps` proxy)
 - agent run in app container
+- For streamed `/api/agent/run` calls executed via terminal `curl`, always include `-N` (prefer `--no-buffer`) so streamed chunks are visible live.
 
 Do not bypass manager when endpoint exists for the task.
 Pool up/down and `GET /api/pools/ps` responses include an `agents` map keyed by provider name (e.g. `{ "cursor": { "models": [...], "defaultModel": "..." } }`). For `POST /api/agent/run`: always set `agent` to a key from the `agents` map; pick `model` only from that agent's `models` list. If the user specified a preferred model, set `model` explicitly; otherwise omit it to use `defaultModel`. Never invent agent or model names. Never try to read model from shell env vars.

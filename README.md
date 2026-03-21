@@ -59,9 +59,7 @@ This pulls the Docker image (if needed) and starts the container. Connect Cursor
 3. Select **Dev Containers: Attach to Running Container...**
 4. Pick the **vibeboyrunner** container.
 5. In the new Cursor window, open the folder `/workdir`.
-6. Open the Cursor Agent chat (`Cmd+L` / `Ctrl+L`) and say **Hello** — the Father Agent takes over from here.
-
-On a fresh install the Father Agent detects an empty workspace and walks you through onboarding automatically.
+6. Open the Cursor Agent chat (`Cmd+L` / `Ctrl+L`) and say **Hey, let's start onboarding!** to start onboarding explicitly.
 
 ## CLI Commands
 
@@ -264,10 +262,11 @@ Renders active state symlinks:
 
 ### 3) Workspaces
 
-Ensures `DIND_WORKSPACES_PATH` exists and creates:
+Ensures `DIND_WORKSPACES_PATH` exists.
 
-- `DIND_WORKSPACES_PATH/default/apps` and `DIND_WORKSPACES_PATH/default/features` if no workspace dirs are present.
-- For every workspace directory (existing or new), backfills `<workspace>/apps` and `<workspace>/features`.
+For every existing workspace directory, backfills `<workspace>/apps` and `<workspace>/features`.
+
+Bootstrap no longer auto-creates an `onboarding` workspace scaffold. Onboarding is started explicitly by user request, and the Father Agent creates `workspaces/onboarding/{apps,features}` when needed.
 
 ### 4) Manager Service
 
@@ -285,6 +284,7 @@ Configures git identity from env vars:
 
 - `git config --global user.name` ← `GIT_USER_NAME`
 - `git config --global user.email` ← `GIT_USER_EMAIL`
+
 
 ## Manager API
 
@@ -328,6 +328,39 @@ Request body:
 - `prompt` (string) — prompt to send
 - `threadId` (optional string) — omit to create a new thread
 - `model` (optional string) — overrides `MANAGER_AGENT_MODEL`
+- `stream` (optional boolean) — default `true`; set `false` for legacy single JSON response
+- `streamFormat` (optional string) — `unified` (default) or `raw`
+- `streamEnvelope` (optional string) — `plain` (default) or `sse`
+
+When `stream=true`:
+
+- `streamEnvelope: "plain"` (default) -> response content type is `text/plain`, and output is streamed as plain chunks without `event:` / `data:` wrappers
+- `streamEnvelope: "sse"` -> response content type is `text/event-stream`
+
+`streamFormat: "unified"` (default) emits FA-friendly normalized events:
+
+- `start` — metadata and selected stream format
+- `message` — provider-normalized content chunk (`assistant_text` or `system_log`, including tool progress where available)
+- `final` — beautified final payload (`output`, `logs`, provider, thread)
+- `result` — full raw result payload (for compatibility/debugging)
+- `done` — successful stream completion marker
+- `error` — failure payload (stream terminates after this event)
+
+`streamFormat: "raw"` emits low-level transport chunks:
+
+- `start` — metadata emitted before execution begins
+- `stdout` — streaming stdout chunks from the worker
+- `stderr` — streaming stderr chunks from the worker
+- `final` — beautified final payload
+- `result` — final structured result payload (same shape as non-streaming response body minus top-level HTTP envelope)
+- `done` — successful stream completion marker
+- `error` — failure payload (stream terminates after this event)
+
+For FA/chat UIs that want "pure text streaming", use:
+
+- `stream: true`
+- `streamFormat: "unified"` (or `raw`)
+- `streamEnvelope: "plain"`
 
 ## Conversation Persistence Layout
 

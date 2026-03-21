@@ -24,5 +24,12 @@ export function createAllAgentProviders(
   return providers;
 }
 
-export { AgentProvider, AgentChatOptions, AgentRunResult, AgentServicePaths } from "./agentProvider";
+export {
+  AgentProvider,
+  AgentChatOptions,
+  AgentRunResult,
+  AgentServicePaths,
+  AgentStreamChannel,
+  AgentUnifiedStreamEvent
+} from "./agentProvider";
 export { CursorAgentProvider } from "./cursorProvider";

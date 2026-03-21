@@ -6,7 +6,8 @@ import pathMod from "path";
 import os from "os";
 
 vi.mock("../utils/process", () => ({
-  runCommand: vi.fn()
+  runCommand: vi.fn(),
+  runCommandStreaming: vi.fn()
 }));
 
 vi.mock("../utils/logger", () => ({
@@ -26,8 +27,9 @@ vi.mock("net", () => {
   return { default: mock, ...mock };
 });
 
-import { runCommand } from "../utils/process";
+import { runCommand, runCommandStreaming } from "../utils/process";
 const mockRunCommand = vi.mocked(runCommand);
+const mockRunCommandStreaming = vi.mocked(runCommandStreaming);
 
 function request(
   server: http.Server,
@@ -66,6 +68,38 @@ function request(
   });
 }
 
+function requestSse(
+  server: http.Server,
+  path: string,
+  body?: object
+): Promise<{ status: number; raw: string }> {
+  return new Promise((resolve, reject) => {
+    const address = server.address() as { port: number };
+    const payload = body ? JSON.stringify(body) : undefined;
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: address.port,
+        path,
+        method: "POST",
+        headers: payload
+          ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }
+          : {}
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk.toString()));
+        res.on("end", () => {
+          resolve({ status: res.statusCode || 0, raw: data });
+        });
+      }
+    );
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
 describe("Manager HTTP Server - Integration", () => {
   let server: http.Server;
   let tmpBase: string;
@@ -87,6 +121,10 @@ describe("Manager HTTP Server - Integration", () => {
     process.env.PORT_POOL_END = "20099";
 
     mockRunCommand.mockResolvedValue({ stdout: "", stderr: "" });
+    mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+      options?.onStdout?.("");
+      return { stdout: "", stderr: "" };
+    });
 
     const { getConfig } = await import("../config");
     const { WorkspacePoolService } = await import("../services/workspacePoolService");
@@ -143,6 +181,10 @@ describe("Manager HTTP Server - Integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRunCommand.mockResolvedValue({ stdout: "", stderr: "" });
+    mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+      options?.onStdout?.("");
+      return { stdout: "", stderr: "" };
+    });
   });
 
   describe("GET /health", () => {
@@ -202,12 +244,123 @@ describe("Manager HTTP Server - Integration", () => {
       const res = await request(server, "POST", "/api/agent/run", {
         containerId: "ctr123",
         prompt: "do something",
-        threadId: "t1"
+        threadId: "t1",
+        stream: false
       });
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
+      expect(res.body.provider).toBe("cursor");
       expect(res.body.containerId).toBe("ctr123");
       expect(res.body.prompt).toBe("do something");
+    });
+
+    it("streams agent output over SSE in unified format by default", async () => {
+      mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+        options?.onStdout?.(
+          '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"streamed-output\\n"}]},"timestamp_ms":1}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"result","subtype":"success","result":"streamed-output\\n"}\n'
+        );
+        return { stdout: "", stderr: "" };
+      });
+
+      const res = await requestSse(server, "/api/agent/run", {
+        containerId: "ctr123",
+        prompt: "do something",
+        threadId: "t1",
+        streamEnvelope: "sse"
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.raw).toContain("event: start");
+      expect(res.raw).toContain('"streamFormat":"unified"');
+      expect(res.raw).toContain('"streamEnvelope":"sse"');
+      expect(res.raw).toContain("event: message");
+      expect(res.raw).toContain("streamed-output");
+      expect(res.raw).toContain("event: final");
+      expect(res.raw).toContain("event: result");
+      expect(res.raw).toContain("event: done");
+    });
+
+    it("uses plain unified streaming as default when stream fields are omitted", async () => {
+      mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+        options?.onStdout?.(
+          '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"default-stream\\n"}]},"timestamp_ms":1}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"result","subtype":"success","result":"default-stream\\n"}\n'
+        );
+        return { stdout: "", stderr: "" };
+      });
+
+      const res = await requestSse(server, "/api/agent/run", {
+        containerId: "ctr123",
+        prompt: "do something",
+        threadId: "t1"
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.raw).toContain("default-stream");
+      expect(res.raw).not.toContain("event:");
+      expect(res.raw).not.toContain("data:");
+    });
+
+    it("supports raw stream format for debugging", async () => {
+      mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+        options?.onStdout?.(
+          '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"raw-stream\\n"}]},"timestamp_ms":1}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"result","subtype":"success","result":"raw-stream\\n"}\n'
+        );
+        return { stdout: "", stderr: "" };
+      });
+
+      const res = await requestSse(server, "/api/agent/run", {
+        containerId: "ctr123",
+        prompt: "do something",
+        threadId: "t1",
+        stream: true,
+        streamFormat: "raw",
+        streamEnvelope: "sse"
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.raw).toContain('"streamFormat":"raw"');
+      expect(res.raw).toContain("event: stdout");
+      expect(res.raw).toContain("raw-stream");
+      expect(res.raw).toContain("event: final");
+    });
+
+    it("streams plain text without SSE envelope when requested", async () => {
+      mockRunCommandStreaming.mockImplementation(async (_command, _args, options) => {
+        options?.onStdout?.(
+          '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"TEST_OK\\n"}]},"timestamp_ms":1}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"/app\\n"}]},"timestamp_ms":2}\n'
+        );
+        options?.onStdout?.(
+          '{"type":"result","subtype":"success","result":"TEST_OK\\n/app\\n"}\n'
+        );
+        return { stdout: "", stderr: "" };
+      });
+
+      const res = await requestSse(server, "/api/agent/run", {
+        containerId: "ctr123",
+        prompt: "do something",
+        threadId: "t1",
+        stream: true,
+        streamFormat: "unified",
+        streamEnvelope: "plain"
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.raw).toContain("TEST_OK");
+      expect(res.raw).toContain("/app");
+      expect(res.raw).not.toContain("event:");
+      expect(res.raw).not.toContain("data:");
     });
   });
 
