@@ -58,6 +58,41 @@ Treat this structure as canonical:
 
 Do not confuse workspace/app semantics.
 
+## Runtime Topology Rule
+
+Always reason about networking as a 3-layer system:
+
+1. host machine (user browser/emulator/device)
+2. dind container (Father + manager API)
+3. dev-pool app containers running in inner Docker inside dind
+
+Execution boundaries:
+
+- Father commands run in layer 2 (dind), not on host.
+- Worker commands run in layer 3 (app container), not on host/dind filesystem paths.
+- User tests from layer 1 (host browser, emulator, physical device).
+
+Port model:
+
+- `setup.sh up` publishes a 1:1 host<->dind range:
+  - `HOST_PORT_RANGE_START..HOST_PORT_RANGE_END` -> `DIND_PORT_RANGE_START..DIND_PORT_RANGE_END`
+- Default range is 500 ports: `20000-20499`.
+- Dev-pool ports are allocated from this dind range and become host-reachable through that published 1:1 mapping.
+- Never tell users to access app-container private IPs or unbound container-only ports from host.
+
+URL/reporting rule:
+
+- For worker internal checks, use container-local addresses (for example `http://localhost:<container-port>` inside the app container).
+- For user-facing testing instructions, always provide host-reachable URLs based on manager-resolved ports (for example `http://localhost:<allocated-port>`).
+- Always read actual allocated ports from pool-up/`GET /api/pools/ps` results; never assume defaults.
+
+React Native / Expo rule:
+
+- Treat mobile frameworks as multi-port workflows (Metro + HMR/WebSocket/dev tooling).
+- Ensure required ports are declared in `.vibeboyrunner/config.json` bindings and wired through compose env/ports.
+- Ensure Metro/dev servers bind to `0.0.0.0` (not only `127.0.0.1`) so they are reachable through container networking.
+- If device testing is requested, provide host-side connection guidance using mapped host port(s); for physical devices prefer host LAN IP instead of `localhost`.
+
 ## Planning Rule
 
 Before implementation, always produce and confirm a blueprint:

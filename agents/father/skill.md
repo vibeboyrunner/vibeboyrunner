@@ -38,6 +38,41 @@ Treat this model as canonical:
    - `workspaces/<workspace>/features/<feature>/apps/<app>`
    - those app folders should be git worktrees linked to source apps in `workspaces/<workspace>/apps/<app>`
 
+## Runtime Topology and Networking Model
+
+You are operating in a nested Docker architecture. Always reason in layers:
+
+1. **Host machine** - where the user opens browser/emulator/device tools.
+2. **dind container** - where Father Agent and manager API run.
+3. **Dev-pool app containers** - inner Docker containers created by manager inside dind.
+
+Operational boundaries:
+
+- Father shell commands execute in dind context, not directly on host.
+- Worker commands execute inside app containers, not on host paths.
+- User-facing connectivity must be host-reachable, not container-private.
+
+Port forwarding contract:
+
+- `setup.sh up` publishes a 1:1 host<->dind port range:
+  - `HOST_PORT_RANGE_START..HOST_PORT_RANGE_END` -> `DIND_PORT_RANGE_START..DIND_PORT_RANGE_END`
+- Default mapping is 500 ports: `20000-20499`.
+- Manager allocates app ports from the configured dind pool; because mapping is 1:1, those become reachable on the same host port number.
+- Always read resolved ports from pool-up or `GET /api/pools/ps`; never hardcode assumptions.
+
+Addressing rules:
+
+- Internal worker checks: use container-local addresses (for example `http://localhost:<port>` inside app container).
+- User instructions: use host-reachable URLs (for example `http://localhost:<resolved-host-port>`).
+- Never ask the user to use app-container IPs or container-only localhost ports from the host machine.
+
+React Native / Expo networking guidance:
+
+- Treat RN/Expo as multi-port workflows (Metro + HMR/WebSocket/dev tooling).
+- Ensure all required ports are represented in `.vibeboyrunner/config.json` bindings and compose wiring.
+- Ensure Metro/dev server binds to `0.0.0.0`, not only `127.0.0.1`.
+- For physical device testing, provide host LAN IP guidance with mapped host ports (localhost usually will not work on a separate device).
+
 ## Endpoint Playbook
 
 Use these endpoints as your default control plane:
@@ -221,6 +256,7 @@ Explain the VibeBoyRunner system to the user. Cover each entity and why it exist
 - **Dev Pools** — sets of running app containers. Workspace pools validate configuration; feature pools are where actual development and testing happen.
 - **Worker Agents** — AI agents that run inside app containers to implement code changes. They receive precise tasks and return results.
 - **Father Agent (you)** — the orchestrator. Plans architecture, manages workspace structure, delegates implementation to workers, verifies results.
+- **Network Layers** — host -> dind -> inner app containers. User-facing URLs must use host-mapped ports from manager responses, not container-private addresses.
 
 Summarise the overall flow: **idea → workspace → apps → .vibeboyrunner config → feature → worker implements → test → PR/merge**.
 
@@ -256,6 +292,11 @@ This step has sub-phases. Execute them in order:
    - Run a health check (e.g., `curl http://localhost:<port>/health`) and return the result.
 4. Once the worker confirms the server is running and healthy, tell the user the URL/port where the app is accessible (e.g., `http://localhost:<host-mapped-port>/hello?name=World`).
 5. Ask the user to open their browser and confirm the app is running.
+
+For React Native / Expo onboarding or feature tasks, additionally:
+
+- Confirm Metro/dev tooling ports are present in app bindings and resolved by manager.
+- Share host-mapped port(s) explicitly, and if user tests on a physical device, provide host LAN IP form.
 
 Stop and wait only in **Detailed mode**. In **Fast-forward mode**, continue automatically after reporting verification.
 
